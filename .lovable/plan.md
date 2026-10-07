@@ -19,6 +19,10 @@ Sistema interno, visual limpo (fundo claro, tipografia sóbria, tom azul-petról
 - Titular com fatura vencida aparece como **inadimplente**.
 
 ## Detalhes técnicos
-- Lovable Cloud: autenticação por e-mail, banco de dados e armazenamento privado para contratos.
-- Tabelas: plans, holders, beneficiaries, contracts (arquivo), invoices; acesso restrito a usuários logados (RLS).
-- Rotas protegidas sob layout autenticado; leituras via server functions com React Query.
+- Hospedagem em VPS próprio, com deploy a partir do GitHub (código sincronizado pelo Lovable); app TanStack Start rodando em Node.
+- Banco PostgreSQL próprio, acessado via `DATABASE_URL` (secret) com Drizzle ORM; migrações SQL versionadas no repositório.
+- Autenticação própria da equipe: usuários com senha (hash bcrypt/argon2) e sessão por cookie httpOnly; sem cadastro público (usuário admin inicial via script).
+- Contratos digitalizados salvos em pasta privada no VPS (caminho configurável), servidos apenas para usuários logados.
+- Tabelas: users, sessions, plans, holders, beneficiaries, contracts (arquivo), invoices.
+- Rotas protegidas sob layout autenticado; leituras via server functions com React Query, todas verificando a sessão.
+- Para o preview do Lovable funcionar, o PostgreSQL do VPS precisa aceitar conexão externa (ou um banco de testes).
