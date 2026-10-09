@@ -1,7 +1,8 @@
 import pg from "pg";
 import { hashPassword } from "./password.server";
+import { readAdminConfig, readDatabaseConfig } from "./runtime-config.server";
 
-let pool: pg.Pool | undefined;
+let client: { query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> } | undefined;
 let ready: Promise<void> | undefined;
 
 const SCHEMA = `
@@ -71,35 +72,63 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 `;
 
-async function init(p: pg.Pool) {
-  await p.query(SCHEMA);
-  const { rows } = await p.query("SELECT count(*)::int AS n FROM users");
-  if (rows[0].n === 0) {
-    const email = process.env["ADMIN_EMAIL"] ?? "admin@admin.com";
-    const password = process.env["ADMIN_PASSWORD"] ?? "admin123";
-    await p.query("INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3)", [
+async function init(dbClient: any) {
+  if (typeof dbClient.exec === "function") {
+    await dbClient.exec(SCHEMA);
+  } else {
+    await dbClient.query(SCHEMA);
+  }
+
+  // Cria usuário administrador inicial se não existir.
+  const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");
+  if (Number(rows[0]?.n || 0) === 0) {
+    const { email, password } = readAdminConfig(process.env);
+    await dbClient.query("INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3)", [
       "Administrador",
       email.toLowerCase(),
       await hashPassword(password),
     ]);
+    console.log("[Banco de Dados] Usuário administrador inicial criado.");
+  }
+
+  // Cria planos padrão se o banco estiver vazio
+  const planRows = await dbClient.query("SELECT count(*)::int AS n FROM plans");
+  if (Number(planRows.rows?.[0]?.n || planRows[0]?.n || 0) === 0) {
+    await dbClient.query(`
+      INSERT INTO plans (name, monthly_price, max_beneficiaries, description, active) VALUES
+      ('Plano Individual Essencial', 35.00, 0, 'Cobertura funeral completa individual com assistência 24h', true),
+      ('Plano Familiar Prata', 65.00, 3, 'Cobertura funeral para o titular e até 3 dependentes diretos', true),
+      ('Plano Familiar Ouro', 95.00, 6, 'Cobertura funeral ampla para o titular e até 6 dependentes', true)
+    `);
+    console.log("[Banco de Dados] Planos iniciais cadastrados com sucesso.");
   }
 }
 
-export async function db(): Promise<pg.Pool> {
-  if (!pool) {
-    const url = process.env["DATABASE_URL"];
-    if (!url) throw new Error("DATABASE_URL não configurada");
-    pool = new pg.Pool({
-      connectionString: url,
-      ssl: process.env["DATABASE_SSL"] === "true" ? { rejectUnauthorized: false } : undefined,
+export async function db() {
+  if (!client) {
+    const config = readDatabaseConfig(process.env);
+    const pool = new pg.Pool({ ...config, connectionTimeoutMillis: 1500 });
+    try {
+      await pool.query("SELECT 1");
+    } catch (error) {
+      await pool.end().catch(() => undefined);
+      throw new Error(
+        "Não foi possível conectar ao PostgreSQL. Verifique se o serviço está ativo e se DATABASE_URL está correta.",
+        { cause: error },
+      );
+    }
+    client = pool;
+    console.log("[Banco de Dados] Conectado ao servidor PostgreSQL.");
+  }
+
+  if (!ready) {
+    ready = init(client).catch((e) => {
+      ready = undefined;
+      throw e;
     });
   }
-  if (!ready) ready = init(pool).catch((e) => {
-    ready = undefined;
-    throw e;
-  });
   await ready;
-  return pool;
+  return client;
 }
 
 export async function q<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
