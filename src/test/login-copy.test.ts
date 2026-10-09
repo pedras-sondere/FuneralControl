@@ -7,5 +7,6 @@ describe("tela de login", () => {
     const source = await readFile(resolve(import.meta.dirname, "../routes/login.tsx"), "utf8");
     expect(source).not.toContain("admin@admin.com");
     expect(source).not.toContain("admin123");
+    expect(source).toContain("Usuário");
   });
 });

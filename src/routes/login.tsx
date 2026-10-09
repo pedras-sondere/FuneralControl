@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from "lucide-react";
+import { ShieldCheck, User, Lock, Loader2, ArrowRight } from "lucide-react";
 import { getMe, login } from "../lib/api.functions";
 import { errorMessage } from "../lib/error-message";
 import { Button } from "../components/ui/button";
@@ -69,15 +69,15 @@ function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label
-                  htmlFor="email"
+                  htmlFor="username"
                   className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
                 >
-                  E-mail
+                  Usuário
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
-                    id="email"
+                    id="username"
                     type="text"
                     placeholder="Digite seu usuário"
                     className="pl-9"
