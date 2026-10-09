@@ -3,6 +3,7 @@
 Sistema interno para gerenciamento completo de planos funerários, titulares, beneficiários, faturas e contratos.
 
 ## Funcionalidades
+
 - **Autenticação**: Acesso restrito para colaboradores da empresa.
 - **Painel Geral (Dashboard)**: Métricas em tempo real de titulares ativos, mensalidades recebidas, vencidas e a vencer.
 - **Gestão de Planos**: Cadastro, limites de dependentes e definição de mensalidades.
@@ -13,10 +14,12 @@ Sistema interno para gerenciamento completo de planos funerários, titulares, be
 ## Execução Local
 
 ### Pré-requisitos
+
 - Node.js (v20+)
 - PostgreSQL (v14+)
 
 ### Instalação
+
 ```bash
 # Instalar dependências
 npm install

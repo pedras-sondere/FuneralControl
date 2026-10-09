@@ -12,7 +12,9 @@ describe("configuração do PostgreSQL", () => {
       connectionString: "postgresql://local",
       ssl: undefined,
     });
-    expect(readDatabaseConfig({ DATABASE_URL: "postgresql://local", DATABASE_SSL: "true" })).toEqual({
+    expect(
+      readDatabaseConfig({ DATABASE_URL: "postgresql://local", DATABASE_SSL: "true" }),
+    ).toEqual({
       connectionString: "postgresql://local",
       ssl: { rejectUnauthorized: true },
     });

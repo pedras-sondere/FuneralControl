@@ -31,6 +31,7 @@
 ### Task 1: Remover acoplamentos de plataforma e configurar execução Node
 
 **Files:**
+
 - Modify: `package.json` — remover `@lovable.dev/vite-tanstack-config` e dependências exclusivas de plataforma.
 - Modify: `vite.config.ts` — declarar plugins Vite/TanStack/Tailwind diretamente e preset de servidor Node.
 - Modify: `bunfig.toml`, `.gitignore`, `README.md`, `docs/plano-sistema.md` — remover referências operacionais a Lovable, Cloudflare, Wrangler e Drizzle quando incompatíveis com o código atual.
@@ -38,6 +39,7 @@
 - Test: `src/test/platform-config.test.ts` — verificar que a configuração não declara alvos ou pacotes removidos.
 
 **Interfaces:**
+
 - Produces: build local Node executável e configuração/documentação coerentes com React/TanStack/`pg`.
 
 - [ ] **Step 1: Write the failing test** `platform configuration contains no managed-platform reference`, lendo `package.json`, `vite.config.ts` e `docs/plano-sistema.md` e afirmando ausência das strings proibidas.
@@ -50,12 +52,14 @@
 ### Task 2: Tornar PostgreSQL local obrigatório e bootstrap explícito
 
 **Files:**
+
 - Create: `src/lib/runtime-config.server.ts` — funções puras `readDatabaseConfig(env)` e `readAdminConfig(env)` para validar ambiente.
 - Modify: `src/lib/db.server.ts` — remover PGlite, usar somente `pg.Pool`, falhar sem `DATABASE_URL`/conexão e exigir `ADMIN_EMAIL`/`ADMIN_PASSWORD` quando o banco estiver vazio.
 - Modify: `.env.example`, `docker-compose.yml`, `README.md` — documentar PostgreSQL local e credenciais de desenvolvimento sem exibi-las na UI.
 - Test: `src/test/runtime-config.test.ts`, `src/test/db-bootstrap.test.ts` — cobrir ambiente ausente, ambiente válido e erro de conexão sem fallback.
 
 **Interfaces:**
+
 - Consumes: `DATABASE_URL`, `DATABASE_SSL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 - Produces: `readDatabaseConfig(env: NodeJS.ProcessEnv)` e `readAdminConfig(env: NodeJS.ProcessEnv)` com erros operacionais em português; `db()` sempre retorna cliente PostgreSQL pronto.
 
@@ -69,12 +73,14 @@
 ### Task 3: Corrigir autenticação, validação de entrada e armazenamento de sessão
 
 **Files:**
+
 - Modify: `src/lib/auth.server.ts` — armazenar hash do token de sessão e manter cookie HTTP-only, SameSite e Secure em produção.
 - Modify: `src/lib/api.functions.ts` — trocar `inputValidator` por `validator`, tipar erros e manter todas as funções protegidas por sessão.
 - Modify: `src/routes/login.tsx`, `src/components/app-layout.tsx`, `src/routes/__root.tsx` — remover qualquer credencial visível/preenchida e traduzir mensagens restantes para pt-BR.
 - Test: `src/test/auth.test.ts`, `src/test/login-copy.test.tsx` — verificar hash de sessão, expiração e ausência de credenciais na interface.
 
 **Interfaces:**
+
 - Consumes: `q`, `hashPassword`, `verifyPassword`, cookies TanStack Start.
 - Produces: sessões persistidas por hash e Server Functions usando `.validator(...)`.
 
@@ -87,6 +93,7 @@
 ### Task 4: Validar CPF e arquivos no servidor
 
 **Files:**
+
 - Create: `src/lib/cpf.ts` — `normalizeCpf(value: string): string` e `isValidCpf(value: string): boolean`.
 - Create: `src/lib/file-signature.ts` — `detectAllowedFileType(bytes: Uint8Array): "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | null`.
 - Modify: `src/lib/api.functions.ts` — usar CPF normalizado/validado, criar índice único parcial para CPF de beneficiário e validar assinatura antes de `saveFile`.
@@ -94,6 +101,7 @@
 - Test: `src/test/cpf.test.ts`, `src/test/file-signature.test.ts` — cobrir CPFs válidos/inválidos e assinaturas reais/falsas.
 
 **Interfaces:**
+
 - Consumes: strings de formulário e bytes do `File`.
 - Produces: CPF de 11 dígitos ou erro de domínio; tipo MIME detectado por assinatura ou `null`.
 
@@ -107,6 +115,7 @@
 ### Task 5: Concluir telas e fluxos de Planos e Faturas
 
 **Files:**
+
 - Create: `src/routes/plans/index.tsx` — listagem, criação, edição e ativação/inativação usando `listPlans`/`savePlan`.
 - Create: `src/routes/invoices/index.tsx` — filtros por status/mês, geração mensal, baixa e cancelamento usando as Server Functions existentes.
 - Modify: `src/routes/index.tsx`, `src/components/app-layout.tsx` — ligar botões e links de titulares, planos e faturas às rotas reais.
@@ -114,6 +123,7 @@
 - Test: `src/test/route-pages.test.tsx`, `src/test/invoice-rules.test.ts` — verificar rotas e regras de geração/duplicidade/status.
 
 **Interfaces:**
+
 - Consumes: `listPlans`, `savePlan`, `listInvoices`, `generateInvoices`, `payInvoice`, `setInvoiceStatus`.
 - Produces: rotas `/plans` e `/invoices` navegáveis, com formulários pt-BR e estados de carregamento/erro/vazio.
 
@@ -127,12 +137,14 @@
 ### Task 6: Corrigir qualidade, documentação e validação final
 
 **Files:**
+
 - Modify: `.prettierrc`, `.gitattributes` — normalizar newline sem gerar milhares de falsos erros no Windows.
 - Modify: `src/**/*.ts`, `src/**/*.tsx` — corrigir `any`, formatação e mensagens de erro identificadas pelo lint.
 - Modify: `README.md`, `docs/plano-sistema.md` — refletir ambiente local, PostgreSQL, execução e fluxo futuro de VPS.
 - Test: `src/test/app-routing.test.tsx` e suíte completa existente.
 
 **Interfaces:**
+
 - Consumes: todos os módulos e rotas das tarefas anteriores.
 - Produces: projeto reproduzível localmente e documentação operacional coerente.
 

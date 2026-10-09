@@ -8,7 +8,10 @@ function dir() {
 
 export async function saveFile(file: File) {
   await mkdir(dir(), { recursive: true });
-  const ext = path.extname(file.name).replace(/[^.a-zA-Z0-9]/g, "").slice(0, 8);
+  const ext = path
+    .extname(file.name)
+    .replace(/[^.a-zA-Z0-9]/g, "")
+    .slice(0, 8);
   const name = `${randomUUID()}${ext}`;
   await writeFile(path.join(dir(), name), Buffer.from(await file.arrayBuffer()));
   return name;

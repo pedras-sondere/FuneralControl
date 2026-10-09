@@ -6,7 +6,13 @@ const projectRoot = resolve(import.meta.dirname, "../..");
 
 describe("configuração de plataforma", () => {
   it("não mantém referências a plataformas gerenciadas", async () => {
-    const files = ["package.json", "vite.config.ts", "bunfig.toml", "README.md", "docs/plano-sistema.md"];
+    const files = [
+      "package.json",
+      "vite.config.ts",
+      "bunfig.toml",
+      "README.md",
+      "docs/plano-sistema.md",
+    ];
     const contents = await Promise.all(
       files.map(async (file) => (await readFile(resolve(projectRoot, file), "utf8")).toLowerCase()),
     );
