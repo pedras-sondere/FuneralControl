@@ -8,6 +8,46 @@ VPS com PostgreSQL no próprio servidor. A mudança elimina dependências de
 plataforma gerenciada e reduz riscos no tratamento de dados pessoais e
 contratos digitalizados.
 
+## Ordem de execução
+
+O trabalho será realizado em três fases sequenciais. Uma fase só começa após
+as verificações da anterior estarem aprovadas.
+
+1. Remover dependências e configurações de plataforma não utilizadas.
+2. Estabilizar o ambiente local com PostgreSQL obrigatório.
+3. Concluir as telas e fluxos previstos para o frontend.
+
+## Fase 1 — Plataforma e dependências
+
+O projeto deixará de usar o pacote de configuração do Lovable. A configuração
+Vite/TanStack Start será nativa, voltada a Node.js, sem alvo Cloudflare. Serão
+removidas referências a Lovable, Cloudflare, Wrangler e PGlite de dependências,
+configuração, documentação e arquivos ignorados, quando não forem necessárias
+ao desenvolvimento local.
+
+## Fase 2 — Ambiente local seguro
+
+O Docker Compose continuará fornecendo PostgreSQL local. A aplicação exigirá
+`DATABASE_URL` e interromperá sua inicialização se o banco não puder ser
+alcançado. Para desenvolvimento, `.env.example` documentará `admin` e `admin`
+como credenciais de provisionamento, mas a interface e os logs não as exibirão.
+
+Esta fase inclui a validação completa e normalização de CPF, validação de
+assinatura dos arquivos enviados, migração de APIs obsoletas, eliminação dos
+erros de lint e ampliação dos testes automatizados.
+
+## Fase 3 — Frontend completo
+
+O frontend existente será completado sem alterar a identidade visual atual.
+Serão criadas as rotas de Planos e Faturas previstas no menu, incluindo:
+
+- cadastro, edição e ativação de planos;
+- listagem de faturas por situação e mês;
+- geração mensal de faturas e baixa de pagamento;
+- ações navegáveis no painel para titulares e faturas;
+- estados de carregamento, vazio, erro, validação e responsividade em todos os
+  fluxos principais.
+
 ## Decisões aprovadas
 
 - A aplicação será executada localmente como servidor Node.js durante o
@@ -81,3 +121,7 @@ restantes de tipo e formatação serão corrigidos.
 5. Arquivo com MIME falso é recusado antes de ser gravado.
 6. Lint, testes e build passam sem erros; avisos de APIs obsoletas são
    removidos.
+7. Não há dependência, configuração ou fluxo de execução destinado a Lovable,
+   Cloudflare, Wrangler ou PGlite.
+8. As telas de Planos e Faturas funcionam de ponta a ponta com as Server
+   Functions existentes, e os atalhos do painel levam ao fluxo correto.
