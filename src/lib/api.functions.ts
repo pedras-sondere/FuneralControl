@@ -6,27 +6,43 @@ const sql = async () => (await import("./db.server")).q;
 
 // ---------- Auth ----------
 export const getMe = createServerFn({ method: "GET" }).handler(async () => {
-  const { getSessionUser } = await import("./auth.server");
-  return getSessionUser();
+  try {
+    const { getSessionUser } = await import("./auth.server");
+    return await getSessionUser();
+  } catch (e) {
+    console.warn("Aviso ao buscar usuário da sessão:", e);
+    return null;
+  }
 });
 
 export const login = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
-    z.object({ email: z.string().email(), password: z.string().min(1) }).parse(d),
+  .validator((d: unknown) =>
+    z.object({ email: z.string().trim().min(1), password: z.string().min(1) }).parse(d),
   )
   .handler(async ({ data }) => {
-    const q = await sql();
-    const { verifyPassword } = await import("./password.server");
-    const { createSession } = await import("./auth.server");
-    const rows = await q("SELECT id, password_hash FROM users WHERE email = $1", [
-      data.email.toLowerCase(),
-    ]);
-    const u = rows[0];
-    if (!u || !(await verifyPassword(data.password, u.password_hash))) {
-      return { ok: false as const, error: "E-mail ou senha inválidos" };
+    try {
+      const q = await sql();
+      const { verifyPassword } = await import("./password.server");
+      const { createSession } = await import("./auth.server");
+      const rows = await q("SELECT id, password_hash FROM users WHERE email = $1", [
+        data.email.toLowerCase(),
+      ]);
+      const u = rows[0];
+      if (!u || !(await verifyPassword(data.password, u.password_hash))) {
+        return { ok: false as const, error: "E-mail ou senha inválidos" };
+      }
+      await createSession(u.id);
+      return { ok: true as const };
+    } catch (err: any) {
+      console.error("Erro no login:", err);
+      const isConnError = err.message?.includes("connect") || err.code === "ECONNREFUSED" || err.message?.includes("DATABASE_URL");
+      return {
+        ok: false as const,
+        error: isConnError
+          ? "Não foi possível conectar ao banco de dados PostgreSQL. Verifique se o serviço está ativo ou confira o DATABASE_URL no arquivo .env."
+          : (err.message || "Erro interno ao processar login"),
+      };
     }
-    await createSession(u.id);
-    return { ok: true as const };
   });
 
 export const logout = createServerFn({ method: "POST" }).handler(async () => {
@@ -86,7 +102,7 @@ const planSchema = z.object({
 });
 
 export const savePlan = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => planSchema.parse(d))
+  .validator((d: unknown) => planSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -101,7 +117,7 @@ export const savePlan = createServerFn({ method: "POST" })
 
 // ---------- Holders ----------
 export const listHolders = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ search: z.string().optional(), status: z.string().optional() }).parse(d ?? {}),
   )
   .handler(async ({ data }) => {
@@ -132,7 +148,7 @@ const holderSchema = z.object({
 });
 
 export const saveHolder = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => holderSchema.parse(d))
+  .validator((d: unknown) => holderSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -154,7 +170,7 @@ export const saveHolder = createServerFn({ method: "POST" })
   });
 
 export const getHolder = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => z.object({ id: z.number() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -184,7 +200,7 @@ const benSchema = z.object({
 });
 
 export const saveBeneficiary = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => benSchema.parse(d))
+  .validator((d: unknown) => benSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -205,7 +221,7 @@ export const saveBeneficiary = createServerFn({ method: "POST" })
   });
 
 export const deleteBeneficiary = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ id: z.number() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -215,7 +231,7 @@ export const deleteBeneficiary = createServerFn({ method: "POST" })
 
 // ---------- Contracts ----------
 export const uploadContract = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => {
+  .validator((d: unknown) => {
     if (!(d instanceof FormData)) throw new Error("Envio inválido");
     const file = d.get("file");
     const holderId = Number(d.get("holder_id"));
@@ -236,7 +252,7 @@ export const uploadContract = createServerFn({ method: "POST" })
   });
 
 export const deleteContract = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ id: z.number() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -248,7 +264,7 @@ export const deleteContract = createServerFn({ method: "POST" })
 
 // ---------- Invoices ----------
 export const listInvoices = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ status: z.string().optional(), month: z.string().optional() }).parse(d ?? {}),
   )
   .handler(async ({ data }) => {
@@ -265,7 +281,7 @@ export const listInvoices = createServerFn({ method: "GET" })
   });
 
 export const generateInvoices = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(d))
+  .validator((d: unknown) => z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(d))
   .handler(async ({ data }) => {
     await auth();
     const q = await sql();
@@ -278,7 +294,7 @@ export const generateInvoices = createServerFn({ method: "POST" })
   });
 
 export const payInvoice = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ id: z.number(), paid_at: z.string(), payment_method: z.string().min(1) }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -290,7 +306,7 @@ export const payInvoice = createServerFn({ method: "POST" })
   });
 
 export const setInvoiceStatus = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ id: z.number(), status: z.enum(["aberta", "cancelada"]) }).parse(d),
   )
   .handler(async ({ data }) => {
