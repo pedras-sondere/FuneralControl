@@ -10,11 +10,41 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as HoldersIndexRouteImport } from './routes/holders/index'
+import { Route as HoldersIdRouteImport } from './routes/holders/$id'
+import { Route as InvoicesIndexRouteImport } from './routes/invoices/index'
+import { Route as PlansIndexRouteImport } from './routes/plans/index'
 import { Route as ApiContractsIdRouteImport } from './routes/api/contracts.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HoldersIndexRoute = HoldersIndexRouteImport.update({
+  id: '/holders/',
+  path: '/holders/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HoldersIdRoute = HoldersIdRouteImport.update({
+  id: '/holders/$id',
+  path: '/holders/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlansIndexRoute = PlansIndexRouteImport.update({
+  id: '/plans/',
+  path: '/plans/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiContractsIdRoute = ApiContractsIdRouteImport.update({
@@ -25,27 +55,69 @@ const ApiContractsIdRoute = ApiContractsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/holders/$id': typeof HoldersIdRoute
+  '/holders/': typeof HoldersIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
+  '/plans/': typeof PlansIndexRoute
   '/api/contracts/$id': typeof ApiContractsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/holders/$id': typeof HoldersIdRoute
+  '/holders': typeof HoldersIndexRoute
+  '/invoices': typeof InvoicesIndexRoute
+  '/plans': typeof PlansIndexRoute
   '/api/contracts/$id': typeof ApiContractsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/holders/$id': typeof HoldersIdRoute
+  '/holders/': typeof HoldersIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
+  '/plans/': typeof PlansIndexRoute
   '/api/contracts/$id': typeof ApiContractsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/contracts/$id'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/holders/$id'
+    | '/holders/'
+    | '/invoices/'
+    | '/plans/'
+    | '/api/contracts/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/contracts/$id'
-  id: '__root__' | '/' | '/api/contracts/$id'
+  to:
+    | '/'
+    | '/login'
+    | '/holders/$id'
+    | '/holders'
+    | '/invoices'
+    | '/plans'
+    | '/api/contracts/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/holders/$id'
+    | '/holders/'
+    | '/invoices/'
+    | '/plans/'
+    | '/api/contracts/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
+  HoldersIdRoute: typeof HoldersIdRoute
+  HoldersIndexRoute: typeof HoldersIndexRoute
+  InvoicesIndexRoute: typeof InvoicesIndexRoute
+  PlansIndexRoute: typeof PlansIndexRoute
   ApiContractsIdRoute: typeof ApiContractsIdRoute
 }
 
@@ -56,6 +128,41 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/holders/': {
+      id: '/holders/'
+      path: '/holders'
+      fullPath: '/holders/'
+      preLoaderRoute: typeof HoldersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/holders/$id': {
+      id: '/holders/$id'
+      path: '/holders/$id'
+      fullPath: '/holders/$id'
+      preLoaderRoute: typeof HoldersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices/': {
+      id: '/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof InvoicesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plans/': {
+      id: '/plans/'
+      path: '/plans'
+      fullPath: '/plans/'
+      preLoaderRoute: typeof PlansIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/contracts/$id': {
@@ -70,6 +177,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
+  HoldersIdRoute: HoldersIdRoute,
+  HoldersIndexRoute: HoldersIndexRoute,
+  InvoicesIndexRoute: InvoicesIndexRoute,
+  PlansIndexRoute: PlansIndexRoute,
   ApiContractsIdRoute: ApiContractsIdRoute,
 }
 export const routeTree = rootRouteImport

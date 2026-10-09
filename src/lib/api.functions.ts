@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { detectAllowedFileType } from "./file-signature";
 import { isValidCpf, normalizeCpf } from "./cpf";
+import { canAddBeneficiary } from "./business-rules";
 
 const auth = async () => (await import("./auth.server")).requireUser();
 const sql = async () => (await import("./db.server")).q;
@@ -215,7 +216,7 @@ export const saveBeneficiary = createServerFn({ method: "POST" })
     const [lim] = await q(`SELECT p.max_beneficiaries AS max,
       (SELECT count(*)::int FROM beneficiaries WHERE holder_id = h.id) AS n
       FROM holders h JOIN plans p ON p.id = h.plan_id WHERE h.id = $1`, [data.holder_id]);
-    if (lim && lim.n >= lim.max) {
+    if (lim && !canAddBeneficiary(lim.n, lim.max)) {
       return { ok: false as const, error: `O plano permite no máximo ${lim.max} beneficiário(s)` };
     }
     await q(`INSERT INTO beneficiaries (holder_id, name, cpf, birth_date, relationship) VALUES ($1,$2,$3,$4,$5)`,
