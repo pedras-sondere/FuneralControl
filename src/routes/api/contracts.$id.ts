@@ -15,12 +15,14 @@ export const Route = createFileRoute("/api/contracts/$id")({
         if (!c) return new Response("Não encontrado", { status: 404 });
         const { readStoredFile } = await import("@/lib/storage.server");
         const buf = await readStoredFile(c.stored_name);
-        const download = new URL(request.url).searchParams.has("download");
+        const inline = new URL(request.url).searchParams.has("inline");
         return new Response(new Uint8Array(buf), {
           headers: {
             "content-type": c.mime_type,
             "cache-control": "private, no-store",
-            "content-disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(c.file_name)}`,
+            "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(c.file_name)}`,
+            "x-content-type-options": "nosniff",
+            "content-security-policy": "sandbox",
           },
         });
       },

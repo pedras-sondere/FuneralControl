@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
   birth_date date,
   relationship text NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS beneficiaries_cpf_unique
+  ON beneficiaries (cpf) WHERE cpf IS NOT NULL;
 CREATE TABLE IF NOT EXISTS contracts (
   id serial PRIMARY KEY,
   holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,

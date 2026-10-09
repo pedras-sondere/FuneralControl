@@ -1,8 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { detectAllowedFileType } from "./file-signature";
+import { isValidCpf, normalizeCpf } from "./cpf";
 
 const auth = async () => (await import("./auth.server")).requireUser();
 const sql = async () => (await import("./db.server")).q;
+const cpfSchema = z.string().refine(isValidCpf, "CPF inválido").transform(normalizeCpf);
 
 // ---------- Auth ----------
 export const getMe = createServerFn({ method: "GET" }).handler(async () => {
@@ -136,7 +139,7 @@ export const listHolders = createServerFn({ method: "GET" })
 const holderSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1),
-  cpf: z.string().min(11),
+  cpf: cpfSchema,
   birth_date: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
@@ -194,7 +197,7 @@ const benSchema = z.object({
   id: z.number().optional(),
   holder_id: z.number(),
   name: z.string().min(1),
-  cpf: z.string().nullable().optional(),
+  cpf: cpfSchema.nullable().optional(),
   birth_date: z.string().nullable().optional(),
   relationship: z.string().min(1),
 });
@@ -242,12 +245,13 @@ export const uploadContract = createServerFn({ method: "POST" })
     await auth();
     const q = await sql();
     const { saveFile } = await import("./storage.server");
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-    if (!allowed.includes(data.file.type)) return { ok: false as const, error: "Envie PDF ou imagem (JPG/PNG)" };
+    const bytes = new Uint8Array(await data.file.arrayBuffer());
+    const detectedType = detectAllowedFileType(bytes);
+    if (!detectedType) return { ok: false as const, error: "Envie um PDF ou imagem válida (JPG/PNG/WebP)" };
     if (data.file.size > 20 * 1024 * 1024) return { ok: false as const, error: "Arquivo maior que 20 MB" };
     const stored = await saveFile(data.file);
     await q(`INSERT INTO contracts (holder_id, file_name, stored_name, mime_type, size_bytes) VALUES ($1,$2,$3,$4,$5)`,
-      [data.holderId, data.file.name, stored, data.file.type, data.file.size]);
+      [data.holderId, data.file.name, stored, detectedType, data.file.size]);
     return { ok: true as const };
   });
 
