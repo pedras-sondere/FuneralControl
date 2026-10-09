@@ -12,11 +12,11 @@ export function isValidCpf(value: string): boolean {
 
   let first = 0;
   for (let index = 0; index < 9; index += 1) first += Number(digits[index]) * (10 - index);
-  const firstCheck = (first * 10) % 11 % 10;
+  const firstCheck = ((first * 10) % 11) % 10;
   if (firstCheck !== Number(digits[9])) return false;
 
   let second = 0;
   for (let index = 0; index < 10; index += 1) second += Number(digits[index]) * (11 - index);
-  const secondCheck = (second * 10) % 11 % 10;
+  const secondCheck = ((second * 10) % 11) % 10;
   return secondCheck === Number(digits[10]);
 }

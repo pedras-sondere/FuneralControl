@@ -1,6 +1,4 @@
 import { createFileRoute, redirect, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { toast } from "sonner";
 import {
   ShieldCheck,
   Users,
@@ -14,9 +12,9 @@ import {
   Layers,
   ArrowUpRight,
   Receipt,
-  UserCheck
+  UserCheck,
 } from "lucide-react";
-import { getMe, getDashboard, logout } from "../lib/api.functions";
+import { getMe, getDashboard } from "../lib/api.functions";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -30,21 +28,7 @@ export const Route = createFileRoute("/")({
     }
     return { user };
   },
-  loader: async () => {
-    try {
-      return await getDashboard();
-    } catch {
-      return {
-        stats: {
-          active_holders: 0,
-          open_invoices: 0,
-          overdue_invoices: 0,
-          received_month: 0,
-        },
-        upcoming: [],
-      };
-    }
-  },
+  loader: () => getDashboard(),
   component: DashboardPage,
 });
 
@@ -52,28 +36,8 @@ function DashboardPage() {
   const { user } = Route.useRouteContext();
   const data = Route.useLoaderData();
   const navigate = useNavigate();
-  const [loggingOut, setLoggingOut] = useState(false);
 
-  const stats = data?.stats ?? {
-    active_holders: 0,
-    open_invoices: 0,
-    overdue_invoices: 0,
-    received_month: 0,
-  };
-  const upcoming = data?.upcoming ?? [];
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await logout();
-      toast.success("Sessão finalizada");
-      navigate({ to: "/login" });
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao sair");
-    } finally {
-      setLoggingOut(false);
-    }
-  };
+  const { stats, upcoming } = data;
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -103,7 +67,10 @@ function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => navigate({ to: "/holders" })} className="bg-teal-700 hover:bg-teal-800 text-white shadow-sm">
+            <Button
+              onClick={() => navigate({ to: "/holders" })}
+              className="bg-teal-700 hover:bg-teal-800 text-white shadow-sm"
+            >
               <PlusCircle className="mr-2 h-4 w-4" />
               Novo Titular
             </Button>
@@ -169,12 +136,8 @@ function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-rose-600">
-                {stats.overdue_invoices}
-              </div>
-              <p className="text-xs text-rose-500 mt-1">
-                Atenção: inadimplência pendente
-              </p>
+              <div className="text-2xl font-bold text-rose-600">{stats.overdue_invoices}</div>
+              <p className="text-xs text-rose-500 mt-1">Atenção: inadimplência pendente</p>
             </CardContent>
           </Card>
 
@@ -209,7 +172,12 @@ function DashboardPage() {
                 Mensalidades com vencimento próximo que requerem acompanhamento.
               </CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/invoices" })} className="text-teal-700 hover:text-teal-800">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate({ to: "/invoices" })}
+              className="text-teal-700 hover:text-teal-800"
+            >
               Ver todas as faturas
             </Button>
           </CardHeader>
@@ -217,7 +185,9 @@ function DashboardPage() {
             {upcoming.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
                 <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-700 mb-3" />
-                <p className="font-medium text-slate-700 dark:text-slate-300">Nenhuma fatura pendente encontrada</p>
+                <p className="font-medium text-slate-700 dark:text-slate-300">
+                  Nenhuma fatura pendente encontrada
+                </p>
                 <p className="text-xs text-slate-400 mt-1">
                   Ao cadastrar titulares e emitir faturas, elas aparecerão listadas aqui.
                 </p>
@@ -235,7 +205,7 @@ function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {upcoming.map((inv: any) => (
+                    {upcoming.map((inv) => (
                       <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
                         <td className="px-4 py-3.5 font-medium text-slate-900 dark:text-slate-100">
                           {inv.holder_name}
@@ -248,17 +218,28 @@ function DashboardPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           {inv.status === "vencida" ? (
-                            <Badge variant="destructive" className="bg-rose-100 text-rose-700 border-none">
+                            <Badge
+                              variant="destructive"
+                              className="bg-rose-100 text-rose-700 border-none"
+                            >
                               Vencida
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-blue-700 bg-blue-50 border-blue-200">
+                            <Badge
+                              variant="outline"
+                              className="text-blue-700 bg-blue-50 border-blue-200"
+                            >
                               Aberta
                             </Badge>
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/invoices" })} className="h-8 text-teal-700 hover:text-teal-800">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate({ to: "/invoices" })}
+                            className="h-8 text-teal-700 hover:text-teal-800"
+                          >
                             Dar Baixa
                           </Button>
                         </td>

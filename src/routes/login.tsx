@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 import { getMe, login } from "../lib/api.functions";
+import { errorMessage } from "../lib/error-message";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -26,7 +27,7 @@ function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-      if (!email.trim() || !password) {
+    if (!email.trim() || !password) {
       toast.warning("Por favor, preencha todos os campos.");
       return;
     }
@@ -40,8 +41,8 @@ function LoginPage() {
         toast.success("Acesso autorizado com sucesso!");
         navigate({ to: "/" });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Não foi possível conectar ao servidor");
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Não foi possível conectar ao servidor"));
     } finally {
       setLoading(false);
     }
@@ -67,15 +68,18 @@ function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <Label
+                  htmlFor="email"
+                  className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+                >
                   E-mail
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     id="email"
-                     type="text"
-                     placeholder="Digite seu usuário"
+                    type="text"
+                    placeholder="Digite seu usuário"
                     className="pl-9"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +91,10 @@ function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <Label
+                  htmlFor="password"
+                  className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+                >
                   Senha
                 </Label>
                 <div className="relative">

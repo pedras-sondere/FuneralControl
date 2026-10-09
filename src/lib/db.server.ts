@@ -2,7 +2,7 @@ import pg from "pg";
 import { hashPassword } from "./password.server";
 import { readAdminConfig, readDatabaseConfig } from "./runtime-config.server";
 
-let client: { query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> } | undefined;
+let client: pg.Pool | undefined;
 let ready: Promise<void> | undefined;
 
 const SCHEMA = `
@@ -74,12 +74,8 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 `;
 
-async function init(dbClient: any) {
-  if (typeof dbClient.exec === "function") {
-    await dbClient.exec(SCHEMA);
-  } else {
-    await dbClient.query(SCHEMA);
-  }
+async function init(dbClient: pg.Pool) {
+  await dbClient.query(SCHEMA);
 
   // Cria usuário administrador inicial se não existir.
   const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");
@@ -133,7 +129,7 @@ export async function db() {
   return client;
 }
 
-export async function q<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
+export async function q<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   const p = await db();
   const r = await p.query(sql, params);
   return r.rows as T[];

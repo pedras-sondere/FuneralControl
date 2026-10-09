@@ -8,9 +8,10 @@ export const Route = createFileRoute("/api/contracts/$id")({
         const user = await getSessionUser();
         if (!user) return new Response("Não autorizado", { status: 401 });
         const { q } = await import("@/lib/db.server");
-        const rows = await q("SELECT file_name, stored_name, mime_type FROM contracts WHERE id = $1", [
-          Number(params.id),
-        ]);
+        const rows = await q(
+          "SELECT file_name, stored_name, mime_type FROM contracts WHERE id = $1",
+          [Number(params.id)],
+        );
         const c = rows[0];
         if (!c) return new Response("Não encontrado", { status: 404 });
         const { readStoredFile } = await import("@/lib/storage.server");
