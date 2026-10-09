@@ -1,24 +1,32 @@
-# Plano Seguro
+# FuneralControl - Sistema de Gestão de Planos Funerários
 
-Quero criar um sistema para controle de planos funerais. Precisa ser um sistema “limpo” em que contenha o cadastro dos titulares e beneficiários, anexar contrato digitalizado, controle das faturas (funciona com uma espécie de mensalidade/assinatura)
+Sistema interno para gerenciamento completo de planos funerários, titulares, beneficiários, faturas e contratos.
 
-This project was built with [Lovable](https://lovable.dev).
+## Funcionalidades
+- **Autenticação**: Acesso restrito para colaboradores da empresa.
+- **Painel Geral (Dashboard)**: Métricas em tempo real de titulares ativos, mensalidades recebidas, vencidas e a vencer.
+- **Gestão de Planos**: Cadastro, limites de dependentes e definição de mensalidades.
+- **Gestão de Titulares & Beneficiários**: Cadastro completo com validação de CPF e controle de dependentes.
+- **Contratos Digitalizados**: Armazenamento e download de documentos anexos dos titulares.
+- **Faturamento e Mensalidades**: Geração mensal de faturas, baixa de pagamentos e controle de inadimplência.
 
-## Build with Lovable
+## Execução Local
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c9e7a4f0-95fb-4cae-a91c-d0d32d04e917).
+### Pré-requisitos
+- Node.js (v20+)
+- PostgreSQL (v14+)
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+### Instalação
+```bash
+# Instalar dependências
+npm install
 
-## Development
+# Configurar variáveis de ambiente no arquivo .env
+# (copie de .env.example)
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+# Subir o PostgreSQL local
+docker compose up -d postgres
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+# Iniciar o servidor de desenvolvimento
 npm run dev
 ```

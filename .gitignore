@@ -14,11 +14,17 @@ dist-ssr
 .vinxi
 .tanstack/**
 .nitro
+.superpowers/
 *.local
 
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+
+# Environment & Uploads
+.env
+uploads/
+data/
 
 # Editor directories and files
 .vscode/*
