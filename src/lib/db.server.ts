@@ -72,10 +72,30 @@ CREATE TABLE IF NOT EXISTS invoices (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (holder_id, reference_month)
 );
+CREATE TABLE IF NOT EXISTS backup_settings (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id),
+  cloud_backup_dir text,
+  external_backup_dir text,
+  external_last_success_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS backup_runs (
+  id serial PRIMARY KEY,
+  destination text NOT NULL CHECK (destination IN ('local', 'nuvem', 'externo')),
+  status text NOT NULL CHECK (status IN ('sucesso', 'falha')),
+  archive_path text,
+  archive_sha256 text,
+  message text,
+  initiated_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
 `;
 
 async function init(dbClient: pg.Pool) {
   await dbClient.query(SCHEMA);
+  await dbClient.query("INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING");
 
   // Cria usuário administrador inicial se não existir.
   const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");
