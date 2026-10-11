@@ -7,6 +7,7 @@ import { errorCode, errorMessage } from "./error-message";
 
 const auth = async () => (await import("./auth.server")).requireUser();
 const sql = async () => (await import("./db.server")).q;
+const assertMutable = async () => (await import("./backup-guard.server")).requireMutableOperation();
 const cpfSchema = z.string().refine(isValidCpf, "CPF inválido").transform(normalizeCpf);
 
 // ---------- Auth ----------
@@ -117,6 +118,7 @@ export const savePlan = createServerFn({ method: "POST" })
   .validator((d: unknown) => planSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     const vals = [
       data.name,
@@ -187,6 +189,7 @@ export const saveHolder = createServerFn({ method: "POST" })
   .validator((d: unknown) => holderSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     const v = [
       data.name,
@@ -268,6 +271,7 @@ export const saveBeneficiary = createServerFn({ method: "POST" })
   .validator((d: unknown) => benSchema.parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     if (data.id) {
       await q(
@@ -303,6 +307,7 @@ export const deleteBeneficiary = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     await q("DELETE FROM beneficiaries WHERE id = $1", [data.id]);
     return { ok: true };
@@ -319,6 +324,7 @@ export const uploadContract = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     const { saveFile } = await import("./storage.server");
     const bytes = new Uint8Array(await data.file.arrayBuffer());
@@ -339,6 +345,7 @@ export const deleteContract = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     const { removeFile } = await import("./storage.server");
     const r = await q("DELETE FROM contracts WHERE id = $1 RETURNING stored_name", [data.id]);
@@ -378,6 +385,7 @@ export const generateInvoices = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(d))
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     const r = await q(
       `INSERT INTO invoices (holder_id, reference_month, amount, due_date)
@@ -396,6 +404,7 @@ export const payInvoice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     await q(`UPDATE invoices SET status='paga', paid_at=$1, payment_method=$2 WHERE id=$3`, [
       data.paid_at,
@@ -411,6 +420,7 @@ export const setInvoiceStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     await auth();
+    await assertMutable();
     const q = await sql();
     await q(`UPDATE invoices SET status=$1, paid_at=NULL, payment_method=NULL WHERE id=$2`, [
       data.status,
