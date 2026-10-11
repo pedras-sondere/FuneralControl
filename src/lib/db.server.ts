@@ -95,7 +95,9 @@ CREATE TABLE IF NOT EXISTS backup_runs (
 
 async function init(dbClient: pg.Pool) {
   await dbClient.query(SCHEMA);
-  await dbClient.query("INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING");
+  await dbClient.query(
+    "INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
+  );
 
   // Cria usuário administrador inicial se não existir.
   const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");

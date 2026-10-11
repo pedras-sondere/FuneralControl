@@ -8,7 +8,10 @@ export function isExternalBackupOverdue(lastSuccess: Date | null, now = new Date
   return now.getTime() - lastSuccess.getTime() >= EXTERNAL_BACKUP_INTERVAL_MS;
 }
 
-export function getBackupAccessStatus(lastSuccess: Date | null, now = new Date()): BackupAccessStatus {
+export function getBackupAccessStatus(
+  lastSuccess: Date | null,
+  now = new Date(),
+): BackupAccessStatus {
   return isExternalBackupOverdue(lastSuccess, now) ? "somente_consulta" : "completo";
 }
 
