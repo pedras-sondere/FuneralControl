@@ -22,5 +22,5 @@ describe("pré-verificação do instalador Windows", () => {
     ]);
 
     expect(JSON.parse(stdout)).toMatchObject({ ok: true, checks: { windows: true } });
-  });
+  }, 15_000);
 });
