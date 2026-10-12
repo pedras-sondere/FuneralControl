@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import os from "node:os";
 import { promisify } from "node:util";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -50,5 +52,30 @@ describe("bootstrap da instalação local", () => {
       databaseUser: "funeralcontrol_app",
       requiresPostgreSQL: true,
     });
+  }, 15_000);
+
+  it("cria o log antes de validar os pré-requisitos da instalação", async () => {
+    const dataRoot = await mkdtemp(path.join(os.tmpdir(), "funeralcontrol-installer-"));
+
+    try {
+      await expect(
+        execFileAsync("powershell.exe", [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+          "-InstallRoot",
+          path.join(dataRoot, "instalacao-inexistente"),
+          "-DataRoot",
+          dataRoot,
+          "-SkipPrerequisites",
+        ]),
+      ).rejects.toMatchObject({ code: 1 });
+
+      await expect(stat(path.join(dataRoot, "logs", "instalacao.log"))).resolves.toBeDefined();
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
   }, 15_000);
 });
