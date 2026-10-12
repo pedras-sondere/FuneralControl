@@ -1,10 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ShieldCheck, LogOut, Users, Layers, Receipt, LayoutDashboard } from "lucide-react";
-import { logout } from "../lib/api.functions";
+import { checkForUpdate, logout } from "../lib/api.functions";
+import type { AvailableRelease } from "../lib/update-rules";
 import { errorMessage } from "../lib/error-message";
 import { Button } from "./ui/button";
+import { UpdateNotice } from "./update-notice";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -15,6 +17,13 @@ interface AppLayoutProps {
 export function AppLayout({ children, activeTab = "dashboard", user }: AppLayoutProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [release, setRelease] = useState<AvailableRelease | null>(null);
+
+  useEffect(() => {
+    void checkForUpdate()
+      .then(setRelease)
+      .catch(() => undefined);
+  }, []);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -38,6 +47,14 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+      {release ? (
+        <UpdateNotice
+          release={release}
+          onUpdate={() =>
+            toast.info("A atualização será preparada com um backup antes de ser aplicada.")
+          }
+        />
+      ) : null}
       {/* Header / Navbar */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">

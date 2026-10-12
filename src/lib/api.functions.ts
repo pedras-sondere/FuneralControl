@@ -61,6 +61,13 @@ export const logout = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: true };
 });
 
+export const checkForUpdate = createServerFn({ method: "GET" }).handler(async () => {
+  await auth();
+  const { APP_VERSION } = await import("./app-version");
+  const { getAvailableRelease } = await import("./github-releases.server");
+  return getAvailableRelease(APP_VERSION);
+});
+
 // ---------- Shared SQL ----------
 const INVOICE_STATUS = `CASE WHEN i.status = 'aberta' AND i.due_date < current_date THEN 'vencida' ELSE i.status END`;
 const HOLDER_STATUS = `CASE WHEN h.status = 'cancelado' THEN 'cancelado'
