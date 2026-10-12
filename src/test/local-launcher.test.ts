@@ -19,6 +19,25 @@ describe("inicializador local", () => {
     expect(script).toContain("$psqlCommand = Get-Command psql.exe");
   });
 
+  it("carrega a configuração local do banco antes de iniciar a versão compilada", async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectRoot, "package.json"), "utf8"),
+    ) as { scripts?: { start?: string } };
+
+    expect(packageJson.scripts?.start).toContain("--env-file=.env");
+  });
+
+  it("serve a versão compilada localmente com arquivos estáticos e rotas do sistema", async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectRoot, "package.json"), "utf8"),
+    ) as { scripts?: { start?: string } };
+
+    expect(packageJson.scripts?.start).toContain("srvx");
+    expect(packageJson.scripts?.start).toContain("--dir .");
+    expect(packageJson.scripts?.start).toContain("--static dist/client");
+    expect(packageJson.scripts?.start).toContain("--entry dist/server/server.js");
+  });
+
   it("planeja abrir somente o endereço local e não inicia processos no modo de teste", async () => {
     const { stdout } = await execFileAsync("powershell.exe", [
       "-NoProfile",
