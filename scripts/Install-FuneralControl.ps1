@@ -134,15 +134,20 @@ function Test-ConfiguredDatabase([string]$ConfigPath) {
 }
 
 if (-not $SkipPrerequisites) {
-  $preflightJson = & (Join-Path $scriptRoot 'Test-FuneralControlPrerequisites.ps1') -AsJson
+  $preflightOutput = @(& (Join-Path $scriptRoot 'Test-FuneralControlPrerequisites.ps1') -AsJson 2>&1)
   $preflightExitCode = $LASTEXITCODE
+  $preflightText = ($preflightOutput | ForEach-Object { $_.ToString() }) -join "`n"
+  Write-Host ('Resultado da pré-verificação: ' + $preflightText)
   if ($preflightExitCode -ne 0) {
     $preflightDetails = 'Consulte o log de instalação.'
     try {
-      $preflightReport = ($preflightJson -join "`n") | ConvertFrom-Json
+      $preflightJson = ($preflightText -split "`r?`n" | Where-Object { $_.TrimStart().StartsWith('{') } | Select-Object -Last 1)
+      $preflightReport = $preflightJson | ConvertFrom-Json
       $reportedErrors = @($preflightReport.errors | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
       if ($reportedErrors.Count -gt 0) { $preflightDetails = $reportedErrors -join ' ' }
-    } catch { }
+    } catch {
+      if (-not [string]::IsNullOrWhiteSpace($preflightText)) { $preflightDetails = $preflightText }
+    }
     throw ('Os pré-requisitos da instalação não foram atendidos. ' + $preflightDetails)
   }
 }

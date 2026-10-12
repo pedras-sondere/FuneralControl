@@ -101,9 +101,9 @@ describe("bootstrap da instalação local", () => {
         ),
       ).rejects.toMatchObject({ code: 1 });
 
-      await expect(readFile(path.join(dataRoot, "logs", "instalacao.log"), "utf8")).resolves.toContain(
-        "O instalador é compatível somente com Windows.",
-      );
+      const log = await readFile(path.join(dataRoot, "logs", "instalacao.log"), "utf8");
+      expect(log).toContain("Resultado da pré-verificação:");
+      expect(log).toContain("O instalador é compatível somente com Windows.");
     } finally {
       await rm(dataRoot, { recursive: true, force: true });
     }
