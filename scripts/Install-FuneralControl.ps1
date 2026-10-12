@@ -81,9 +81,11 @@ function Install-Node {
     Invoke-WebRequest -Uri $manifest.Node.Url -OutFile $msiPath -UseBasicParsing
     $fileName = Split-Path -Leaf ([Uri]$manifest.Node.Url).AbsolutePath
     $checksums = (Invoke-WebRequest -Uri $manifest.Node.ChecksumUrl -UseBasicParsing).Content
-    $expected = (($checksums -split "`n") | Where-Object { $_ -match ("\\s" + [regex]::Escape($fileName) + '$') } |
-      Select-Object -First 1).Split()[0]
-    if (-not $expected) { throw 'Não foi possível obter o hash oficial do Node.js.' }
+    $checksumLine = ($checksums -split "`n") |
+      Where-Object { $_ -match ('\s' + [regex]::Escape($fileName) + '$') } |
+      Select-Object -First 1
+    if (-not $checksumLine) { throw 'Não foi possível obter o hash oficial do Node.js.' }
+    $expected = $checksumLine.Split()[0]
     $actual = (Get-FileHash -LiteralPath $msiPath -Algorithm SHA256).Hash
     if ($actual -ne $expected) { throw 'A conferência de segurança do Node.js falhou.' }
     $nodeInstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i', $msiPath, '/qn', '/norestart' -Wait -PassThru

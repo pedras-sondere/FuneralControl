@@ -108,4 +108,15 @@ describe("bootstrap da instalação local", () => {
       await rm(dataRoot, { recursive: true, force: true });
     }
   }, 15_000);
+
+  it("localiza o hash oficial do Node antes de processar sua linha", async () => {
+    const installerScript = await readFile(
+      path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+      "utf8",
+    );
+
+    expect(installerScript).toContain("$checksumLine =");
+    expect(installerScript).toContain("'\\s' + [regex]::Escape($fileName) + '$'");
+    expect(installerScript).toContain("if (-not $checksumLine)");
+  });
 });
