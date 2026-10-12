@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ShieldCheck,
@@ -15,6 +15,7 @@ import type { AvailableRelease } from "../lib/update-rules";
 import { errorMessage } from "../lib/error-message";
 import { Button } from "./ui/button";
 import { UpdateNotice } from "./update-notice";
+import { SessionTimeout } from "./session-timeout";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -33,7 +34,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
       .catch(() => undefined);
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setLoggingOut(true);
     try {
       await logout();
@@ -44,7 +45,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
     } finally {
       setLoggingOut(false);
     }
-  };
+  }, [navigate]);
 
   const navItems = [
     { id: "dashboard", label: "Painel", to: "/", icon: LayoutDashboard },
@@ -64,6 +65,13 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
           }
         />
       ) : null}
+      <SessionTimeout
+        onWarning={() => toast.warning("Sua sessão será encerrada em 15 minutos por inatividade.")}
+        onTimeout={() => {
+          toast.info("Encerrando sessão por inatividade.");
+          void handleLogout();
+        }}
+      />
       {/* Header / Navbar */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
