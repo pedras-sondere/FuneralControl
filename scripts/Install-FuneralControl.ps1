@@ -15,7 +15,23 @@ $result = [ordered]@{
   preservesExistingConfiguration = $true
   createsSingleShortcut = $true
   verifiesDatabaseBeforeShortcut = $true
+  writesInstallationLog = $true
+  requiresBuiltApplication = $true
   requiredDependencies = @('Node.js', 'PostgreSQL')
+}
+
+$logStarted = $false
+function Stop-InstallationTranscript {
+  if ($script:logStarted) {
+    Stop-Transcript | Out-Null
+    $script:logStarted = $false
+  }
+}
+
+trap {
+  Write-Error ('A instalação local falhou: ' + $_.Exception.Message)
+  Stop-InstallationTranscript
+  exit 1
 }
 
 if ($DryRun) {
@@ -61,13 +77,17 @@ function Install-Node {
     if (-not $expected) { throw 'Não foi possível obter o hash oficial do Node.js.' }
     $actual = (Get-FileHash -LiteralPath $msiPath -Algorithm SHA256).Hash
     if ($actual -ne $expected) { throw 'A conferência de segurança do Node.js falhou.' }
-    Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i', $msiPath, '/qn', '/norestart' -Wait
-    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível instalar o Node.js.' }
+    $nodeInstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i', $msiPath, '/qn', '/norestart' -Wait -PassThru
+    if ($nodeInstaller.ExitCode -notin @(0, 3010)) { throw 'Não foi possível instalar o Node.js.' }
   } finally {
     Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
   $nodeFolder = Join-Path $env:ProgramFiles 'nodejs'
   if (Test-Path -LiteralPath $nodeFolder) { $env:Path = "$nodeFolder;$env:Path" }
+  $node = Get-Command node.exe -ErrorAction SilentlyContinue
+  if (-not $node) { throw 'O Node.js foi instalado, mas não pôde ser localizado.' }
+  $major = [int]((& $node.Source '--version').TrimStart('v').Split('.')[0])
+  if ($major -lt 20) { throw 'A versão instalada do Node.js não é compatível com o FuneralControl.' }
 }
 
 function Install-PostgreSQL {
@@ -112,6 +132,18 @@ if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) {
   throw 'A pasta de instalação do FuneralControl não foi encontrada.'
 }
 
+$logRoot = Join-Path $DataRoot 'logs'
+New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+$logPath = Join-Path $logRoot 'instalacao.log'
+Start-Transcript -Path $logPath -Append | Out-Null
+$logStarted = $true
+Write-Host 'Iniciando a preparação local do FuneralControl.'
+
+$buildEntry = Join-Path $InstallRoot 'dist\server\server.js'
+if (-not (Test-Path -LiteralPath $buildEntry -PathType Leaf)) {
+  throw 'A mídia de instalação não contém a aplicação compilada. Baixe um novo instalador.'
+}
+
 Install-Node
 $configPath = Join-Path $InstallRoot '.env'
 if (-not (Test-Path -LiteralPath $configPath)) {
@@ -125,11 +157,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
   Write-Host 'A configuração existente do FuneralControl foi preservada.'
 }
 
-& npm.cmd 'ci'
+& npm.cmd 'ci' '--omit=dev'
 if ($LASTEXITCODE -ne 0) { throw 'Não foi possível instalar as dependências do FuneralControl.' }
 Test-ConfiguredDatabase $configPath
-& npm.cmd 'run' 'build'
-if ($LASTEXITCODE -ne 0) { throw 'Não foi possível preparar o FuneralControl para execução local.' }
 
 $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
 $shortcutPath = Join-Path $desktop 'FuneralControl.lnk'
@@ -139,4 +169,6 @@ $shortcut.TargetPath = Join-Path $InstallRoot 'FuneralControl.cmd'
 $shortcut.WorkingDirectory = $InstallRoot
 $shortcut.Save()
 
-& (Join-Path $scriptRoot 'Start-FuneralControl.ps1') -InstallRoot $InstallRoot
+Write-Host 'Instalação local concluída. Use o atalho FuneralControl na Área de Trabalho para iniciar o sistema.'
+Stop-InstallationTranscript
+exit 0

@@ -25,6 +25,8 @@ describe("bootstrap da instalação local", () => {
       preservesExistingConfiguration: true,
       createsSingleShortcut: true,
       verifiesDatabaseBeforeShortcut: true,
+      writesInstallationLog: true,
+      requiresBuiltApplication: true,
       requiredDependencies: ["Node.js", "PostgreSQL"],
     });
   }, 15_000);
