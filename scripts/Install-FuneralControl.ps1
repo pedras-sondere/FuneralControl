@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)] [string]$InstallRoot,
   [string]$DataRoot = (Join-Path $env:ProgramData 'FuneralControl'),
@@ -29,7 +29,9 @@ function Stop-InstallationTranscript {
 }
 
 trap {
-  Write-Error ('A instalação local falhou: ' + $_.Exception.Message)
+  $failureMessage = 'A instalação local falhou: ' + $_.Exception.Message
+  Write-Host $failureMessage -ForegroundColor Red
+  [Console]::Error.WriteLine($failureMessage)
   Stop-InstallationTranscript
   exit 1
 }
@@ -132,8 +134,17 @@ function Test-ConfiguredDatabase([string]$ConfigPath) {
 }
 
 if (-not $SkipPrerequisites) {
-  & (Join-Path $scriptRoot 'Test-FuneralControlPrerequisites.ps1') -AsJson | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw 'Os pré-requisitos da instalação não foram atendidos.' }
+  $preflightJson = & (Join-Path $scriptRoot 'Test-FuneralControlPrerequisites.ps1') -AsJson
+  $preflightExitCode = $LASTEXITCODE
+  if ($preflightExitCode -ne 0) {
+    $preflightDetails = 'Consulte o log de instalação.'
+    try {
+      $preflightReport = ($preflightJson -join "`n") | ConvertFrom-Json
+      $reportedErrors = @($preflightReport.errors | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+      if ($reportedErrors.Count -gt 0) { $preflightDetails = $reportedErrors -join ' ' }
+    } catch { }
+    throw ('Os pré-requisitos da instalação não foram atendidos. ' + $preflightDetails)
+  }
 }
 if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) {
   throw 'A pasta de instalação do FuneralControl não foi encontrada.'

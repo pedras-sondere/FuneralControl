@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)] [string]$PackageUrl,
   [Parameter(Mandatory = $true)] [string]$Sha256,

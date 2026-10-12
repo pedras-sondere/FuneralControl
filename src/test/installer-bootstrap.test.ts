@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -74,6 +74,36 @@ describe("bootstrap da instalação local", () => {
       ).rejects.toMatchObject({ code: 1 });
 
       await expect(stat(path.join(dataRoot, "logs", "instalacao.log"))).resolves.toBeDefined();
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("registra o motivo específico quando a pré-verificação falhar", async () => {
+    const dataRoot = await mkdtemp(path.join(os.tmpdir(), "funeralcontrol-installer-"));
+
+    try {
+      await expect(
+        execFileAsync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+            "-InstallRoot",
+            projectRoot,
+            "-DataRoot",
+            dataRoot,
+          ],
+          { env: { ...process.env, OS: "invalid" } },
+        ),
+      ).rejects.toMatchObject({ code: 1 });
+
+      await expect(readFile(path.join(dataRoot, "logs", "instalacao.log"), "utf8")).resolves.toContain(
+        "O instalador é compatível somente com Windows.",
+      );
     } finally {
       await rm(dataRoot, { recursive: true, force: true });
     }

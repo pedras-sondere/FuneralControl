@@ -1,5 +1,5 @@
 #define AppName "FuneralControl"
-#define AppVersion "0.1.0"
+#define AppVersion "1.0.1"
 #define AppPublisher "FuneralControl"
 
 [Setup]
