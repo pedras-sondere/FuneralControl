@@ -10,7 +10,7 @@ import {
   LayoutDashboard,
   HardDrive,
 } from "lucide-react";
-import { checkForUpdate, logout } from "../lib/api.functions";
+import { checkForUpdate, logoutWithBackup } from "../lib/api.functions";
 import type { AvailableRelease } from "../lib/update-rules";
 import { errorMessage } from "../lib/error-message";
 import { Button } from "./ui/button";
@@ -37,8 +37,12 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
     try {
-      await logout();
-      toast.success("Sessão finalizada com sucesso");
+      const result = await logoutWithBackup();
+      if (result.backup.completed) {
+        toast.success("Sessão finalizada e backups concluídos.");
+      } else {
+        toast.warning("Sessão finalizada. Verifique os backups que precisam de atenção.");
+      }
       navigate({ to: "/login" });
     } catch (err: unknown) {
       toast.error(errorMessage(err, "Erro ao sair"));

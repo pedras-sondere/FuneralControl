@@ -61,6 +61,130 @@ export const logout = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: true };
 });
 
+type BackupDestination = "local" | "nuvem" | "externo";
+type AutomaticBackupSummary = {
+  completed: boolean;
+  succeeded: BackupDestination[];
+  failed: BackupDestination[];
+  notConfigured: BackupDestination[];
+};
+
+async function runConfiguredBackups({
+  userId,
+  onlyDestinations,
+}: {
+  userId: number;
+  onlyDestinations?: BackupDestination[];
+}) {
+  const q = await sql();
+  const [settings] = await q<{
+    local_backup_dir: string | null;
+    cloud_backup_dir: string | null;
+    external_backup_dir: string | null;
+  }>(
+    "SELECT local_backup_dir, cloud_backup_dir, external_backup_dir FROM backup_settings WHERE id=true",
+  );
+  const { getConfiguredBackupDestinations, summarizeBackupRuns } =
+    await import("./backup-orchestrator.server");
+  const configuration = getConfiguredBackupDestinations({
+    localBackupDirectory: settings?.local_backup_dir ?? null,
+    cloudBackupDirectory: settings?.cloud_backup_dir ?? null,
+    externalBackupDirectory: settings?.external_backup_dir ?? null,
+  });
+  const selected = onlyDestinations
+    ? configuration.destinations.filter((entry) => onlyDestinations.includes(entry.destination))
+    : configuration.destinations;
+  const notConfigured = onlyDestinations
+    ? configuration.notConfigured.filter((destination) => onlyDestinations.includes(destination))
+    : configuration.notConfigured;
+
+  let results: Array<{
+    destination: BackupDestination;
+    status: "sucesso" | "falha";
+    archivePath?: string;
+    message?: string;
+  }> = [];
+  let sourceDirectory: string | undefined;
+  try {
+    if (selected.length > 0) {
+      const { cp, mkdir, mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const path = await import("node:path");
+      const { getUploadDirectory } = await import("./storage.server");
+      const { runBackup } = await import("./backup-service.server");
+      sourceDirectory = await mkdtemp(path.join(tmpdir(), "funeral-control-backup-source-"));
+      try {
+        await mkdir(path.join(sourceDirectory, "uploads"), { recursive: true });
+        await cp(getUploadDirectory(), path.join(sourceDirectory, "uploads"), {
+          recursive: true,
+          force: true,
+        }).catch(() => undefined);
+        await writeFile(
+          path.join(sourceDirectory, "configuracao.json"),
+          JSON.stringify({ generatedAt: new Date().toISOString(), application: "FuneralControl" }),
+        );
+        results = await runBackup({ sourceDirectory, destinations: selected });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Não foi possível preparar o backup.";
+        results = selected.map(({ destination }) => ({ destination, status: "falha", message }));
+      } finally {
+        if (sourceDirectory) await rm(sourceDirectory, { recursive: true, force: true });
+      }
+    }
+  } finally {
+    for (const result of results) {
+      await q(
+        `INSERT INTO backup_runs (destination, status, archive_path, message, initiated_by, completed_at)
+         VALUES ($1,$2,$3,$4,$5,now())`,
+        [
+          result.destination,
+          result.status,
+          result.archivePath ?? null,
+          result.message ?? null,
+          userId,
+        ],
+      );
+    }
+    if (results.some((result) => result.destination === "externo" && result.status === "sucesso")) {
+      await q(
+        "UPDATE backup_settings SET external_last_success_at=now(), updated_at=now() WHERE id=true",
+      );
+    }
+  }
+
+  return {
+    ...summarizeBackupRuns({ results, notConfigured }),
+    results,
+  };
+}
+
+export const logoutWithBackup = createServerFn({ method: "POST" }).handler(async () => {
+  const user = await auth();
+  let backup: AutomaticBackupSummary = {
+    completed: false,
+    succeeded: [],
+    failed: [],
+    notConfigured: [],
+  };
+  try {
+    const result = await runConfiguredBackups({ userId: user.id });
+    backup = {
+      completed: result.completed,
+      succeeded: result.succeeded,
+      failed: result.failed,
+      notConfigured: result.notConfigured,
+    };
+  } catch (error) {
+    console.error("Não foi possível executar os backups de encerramento:", error);
+    backup.failed = ["local", "nuvem", "externo"];
+  } finally {
+    const { destroySession } = await import("./auth.server");
+    await destroySession();
+  }
+  return { ok: true as const, backup };
+});
+
 export const checkForUpdate = createServerFn({ method: "GET" }).handler(async () => {
   await auth();
   const { APP_VERSION } = await import("./app-version");
@@ -125,60 +249,24 @@ export const saveBackupSettings = createServerFn({ method: "POST" })
 
 export const runExternalBackup = createServerFn({ method: "POST" }).handler(async () => {
   const user = await auth();
-  const q = await sql();
-  const [settings] = await q<{ external_backup_dir: string | null }>(
-    "SELECT external_backup_dir FROM backup_settings WHERE id=true",
-  );
-  if (!settings?.external_backup_dir) {
+  const backup = await runConfiguredBackups({
+    userId: user.id,
+    onlyDestinations: ["externo"],
+  });
+  if (backup.notConfigured.includes("externo")) {
     return {
       ok: false as const,
       error: "Informe a pasta do HD externo antes de realizar o backup.",
     };
   }
-  const { cp, mkdir, mkdtemp, rm, writeFile } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const path = await import("node:path");
-  const { getUploadDirectory } = await import("./storage.server");
-  const { runBackup } = await import("./backup-service.server");
-  const sourceDirectory = await mkdtemp(path.join(tmpdir(), "funeral-control-backup-source-"));
-  try {
-    await mkdir(path.join(sourceDirectory, "uploads"), { recursive: true });
-    await cp(getUploadDirectory(), path.join(sourceDirectory, "uploads"), {
-      recursive: true,
-      force: true,
-    }).catch(() => undefined);
-    await writeFile(
-      path.join(sourceDirectory, "configuracao.json"),
-      JSON.stringify({ generatedAt: new Date().toISOString(), application: "FuneralControl" }),
-    );
-    const [result] = await runBackup({
-      sourceDirectory,
-      destinations: [{ destination: "externo", directory: settings.external_backup_dir }],
-    });
-    if (!result) throw new Error("Não foi possível iniciar o backup externo.");
-    await q(
-      `INSERT INTO backup_runs (destination, status, archive_path, message, initiated_by, completed_at) VALUES ($1,$2,$3,$4,$5,now())`,
-      [
-        result.destination,
-        result.status,
-        result.archivePath ?? null,
-        result.message ?? null,
-        user.id,
-      ],
-    );
-    if (result.status === "sucesso") {
-      await q(
-        "UPDATE backup_settings SET external_last_success_at=now(), updated_at=now() WHERE id=true",
-      );
-      return { ok: true as const };
-    }
+  const failure = backup.results.find((result) => result.status === "falha");
+  if (failure) {
     return {
       ok: false as const,
-      error: result.message ?? "Não foi possível concluir o backup no HD externo.",
+      error: failure.message ?? "Não foi possível concluir o backup no HD externo.",
     };
-  } finally {
-    await rm(sourceDirectory, { recursive: true, force: true });
   }
+  return { ok: true as const };
 });
 
 // ---------- Shared SQL ----------
