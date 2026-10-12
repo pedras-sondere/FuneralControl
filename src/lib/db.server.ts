@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE TABLE IF NOT EXISTS backup_settings (
   id boolean PRIMARY KEY DEFAULT true CHECK (id),
+  local_backup_dir text,
   cloud_backup_dir text,
   external_backup_dir text,
   external_last_success_at timestamptz,
@@ -95,6 +96,9 @@ CREATE TABLE IF NOT EXISTS backup_runs (
 
 async function init(dbClient: pg.Pool) {
   await dbClient.query(SCHEMA);
+  await dbClient.query(
+    "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
+  );
   await dbClient.query(
     "INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
   );

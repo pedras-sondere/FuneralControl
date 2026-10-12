@@ -72,11 +72,12 @@ export const getBackupStatus = createServerFn({ method: "GET" }).handler(async (
   await auth();
   const q = await sql();
   const [settings] = await q<{
+    local_backup_dir: string | null;
     cloud_backup_dir: string | null;
     external_backup_dir: string | null;
     external_last_success_at: string | null;
   }>(
-    `SELECT cloud_backup_dir, external_backup_dir, external_last_success_at::text FROM backup_settings WHERE id = true`,
+    `SELECT local_backup_dir, cloud_backup_dir, external_backup_dir, external_last_success_at::text FROM backup_settings WHERE id = true`,
   );
   const history = await q<{
     id: number;
@@ -102,6 +103,7 @@ export const saveBackupSettings = createServerFn({ method: "POST" })
   .validator((d: unknown) =>
     z
       .object({
+        localBackupDirectory: z.string().trim().nullable(),
         cloudBackupDirectory: z.string().trim().nullable(),
         externalBackupDirectory: z.string().trim().nullable(),
       })
@@ -111,11 +113,73 @@ export const saveBackupSettings = createServerFn({ method: "POST" })
     await auth();
     const q = await sql();
     await q(
-      `UPDATE backup_settings SET cloud_backup_dir=$1, external_backup_dir=$2, updated_at=now() WHERE id=true`,
-      [data.cloudBackupDirectory || null, data.externalBackupDirectory || null],
+      `UPDATE backup_settings SET local_backup_dir=$1, cloud_backup_dir=$2, external_backup_dir=$3, updated_at=now() WHERE id=true`,
+      [
+        data.localBackupDirectory || null,
+        data.cloudBackupDirectory || null,
+        data.externalBackupDirectory || null,
+      ],
     );
     return { ok: true as const };
   });
+
+export const runExternalBackup = createServerFn({ method: "POST" }).handler(async () => {
+  const user = await auth();
+  const q = await sql();
+  const [settings] = await q<{ external_backup_dir: string | null }>(
+    "SELECT external_backup_dir FROM backup_settings WHERE id=true",
+  );
+  if (!settings?.external_backup_dir) {
+    return {
+      ok: false as const,
+      error: "Informe a pasta do HD externo antes de realizar o backup.",
+    };
+  }
+  const { cp, mkdir, mkdtemp, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { getUploadDirectory } = await import("./storage.server");
+  const { runBackup } = await import("./backup-service.server");
+  const sourceDirectory = await mkdtemp(path.join(tmpdir(), "funeral-control-backup-source-"));
+  try {
+    await mkdir(path.join(sourceDirectory, "uploads"), { recursive: true });
+    await cp(getUploadDirectory(), path.join(sourceDirectory, "uploads"), {
+      recursive: true,
+      force: true,
+    }).catch(() => undefined);
+    await writeFile(
+      path.join(sourceDirectory, "configuracao.json"),
+      JSON.stringify({ generatedAt: new Date().toISOString(), application: "FuneralControl" }),
+    );
+    const [result] = await runBackup({
+      sourceDirectory,
+      destinations: [{ destination: "externo", directory: settings.external_backup_dir }],
+    });
+    if (!result) throw new Error("Não foi possível iniciar o backup externo.");
+    await q(
+      `INSERT INTO backup_runs (destination, status, archive_path, message, initiated_by, completed_at) VALUES ($1,$2,$3,$4,$5,now())`,
+      [
+        result.destination,
+        result.status,
+        result.archivePath ?? null,
+        result.message ?? null,
+        user.id,
+      ],
+    );
+    if (result.status === "sucesso") {
+      await q(
+        "UPDATE backup_settings SET external_last_success_at=now(), updated_at=now() WHERE id=true",
+      );
+      return { ok: true as const };
+    }
+    return {
+      ok: false as const,
+      error: result.message ?? "Não foi possível concluir o backup no HD externo.",
+    };
+  } finally {
+    await rm(sourceDirectory, { recursive: true, force: true });
+  }
+});
 
 // ---------- Shared SQL ----------
 const INVOICE_STATUS = `CASE WHEN i.status = 'aberta' AND i.due_date < current_date THEN 'vencida' ELSE i.status END`;

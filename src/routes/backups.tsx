@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
-import { HardDrive, Save, ShieldAlert } from "lucide-react";
+import { HardDrive, Play, Save, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppLayout } from "../components/app-layout";
@@ -8,7 +8,12 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { getBackupStatus, getMe, saveBackupSettings } from "../lib/api.functions";
+import {
+  getBackupStatus,
+  getMe,
+  runExternalBackup,
+  saveBackupSettings,
+} from "../lib/api.functions";
 
 export const Route = createFileRoute("/backups")({
   beforeLoad: async () => {
@@ -24,11 +29,13 @@ function BackupsPage() {
   const { user } = Route.useRouteContext();
   const data = Route.useLoaderData();
   const router = useRouter();
+  const [localDirectory, setLocalDirectory] = useState(data.settings?.local_backup_dir ?? "");
   const [cloudDirectory, setCloudDirectory] = useState(data.settings?.cloud_backup_dir ?? "");
   const [externalDirectory, setExternalDirectory] = useState(
     data.settings?.external_backup_dir ?? "",
   );
   const [saving, setSaving] = useState(false);
+  const [runningExternal, setRunningExternal] = useState(false);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -36,6 +43,7 @@ function BackupsPage() {
     try {
       await saveBackupSettings({
         data: {
+          localBackupDirectory: localDirectory || null,
           cloudBackupDirectory: cloudDirectory || null,
           externalBackupDirectory: externalDirectory || null,
         },
@@ -46,6 +54,22 @@ function BackupsPage() {
       toast.error("Não foi possível salvar as pastas de backup.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runExternal = async () => {
+    setRunningExternal(true);
+    try {
+      const result = await runExternalBackup();
+      if (!result.ok) throw new Error(result.error);
+      toast.success("Backup no HD externo concluído e validado.");
+      await router.invalidate();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível realizar o backup externo.",
+      );
+    } finally {
+      setRunningExternal(false);
     }
   };
 
@@ -79,6 +103,15 @@ function BackupsPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={save}>
+              <div>
+                <Label htmlFor="local">Pasta de backup neste computador</Label>
+                <Input
+                  id="local"
+                  value={localDirectory}
+                  onChange={(e) => setLocalDirectory(e.target.value)}
+                  placeholder="Ex.: C:\\FuneralControl\\Backups"
+                />
+              </div>
               <div>
                 <Label htmlFor="cloud">Pasta sincronizada em nuvem</Label>
                 <Input
@@ -122,6 +155,10 @@ function BackupsPage() {
                 : "Ainda não realizado"}
             </p>
             <p className="text-sm text-slate-500">A cópia externa é obrigatória a cada 10 dias.</p>
+            <Button onClick={runExternal} disabled={runningExternal} className="cursor-pointer">
+              <Play className="mr-2 h-4 w-4" />
+              {runningExternal ? "Gerando backup..." : "Realizar backup no HD externo"}
+            </Button>
           </CardContent>
         </Card>
       </div>
