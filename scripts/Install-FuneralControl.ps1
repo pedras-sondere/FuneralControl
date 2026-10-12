@@ -85,7 +85,7 @@ function Save-PendingPostgresAdminPassword([string]$Root, [string]$Password) {
   New-Item -ItemType Directory -Path $Root -Force | Out-Null
   $secretPath = Get-PostgresBootstrapSecretPath $Root
   Set-Content -LiteralPath $secretPath -Value $Password -Encoding ascii -NoNewline
-  & icacls $secretPath '/inheritance:r' '/grant:r=BUILTIN\Administrators:(F)' '/grant:r=SYSTEM:(F)' | Out-Null
+  & icacls.exe $secretPath '/inheritance:r' '/grant:r' '*S-1-5-32-544:(F)' '*S-1-5-18:(F)' | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger a recuperação da instalação do PostgreSQL.' }
 }
 

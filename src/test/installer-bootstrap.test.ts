@@ -130,4 +130,14 @@ describe("bootstrap da instalação local", () => {
     expect(installerScript).toContain("postgres-bootstrap.secret");
     expect(installerScript).toContain("Remove-Item -LiteralPath $postgresBootstrapSecretPath");
   });
+
+  it("protege a recuperação do PostgreSQL sem depender do idioma do Windows", async () => {
+    const installerScript = await readFile(
+      path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+      "utf8",
+    );
+
+    expect(installerScript).toContain("*S-1-5-32-544:(F)");
+    expect(installerScript).toContain("*S-1-5-18:(F)");
+  });
 });
