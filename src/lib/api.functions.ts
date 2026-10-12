@@ -68,6 +68,55 @@ export const checkForUpdate = createServerFn({ method: "GET" }).handler(async ()
   return getAvailableRelease(APP_VERSION);
 });
 
+export const getBackupStatus = createServerFn({ method: "GET" }).handler(async () => {
+  await auth();
+  const q = await sql();
+  const [settings] = await q<{
+    cloud_backup_dir: string | null;
+    external_backup_dir: string | null;
+    external_last_success_at: string | null;
+  }>(
+    `SELECT cloud_backup_dir, external_backup_dir, external_last_success_at::text FROM backup_settings WHERE id = true`,
+  );
+  const history = await q<{
+    id: number;
+    destination: "local" | "nuvem" | "externo";
+    status: "sucesso" | "falha";
+    message: string | null;
+    completed_at: string | null;
+  }>(
+    `SELECT id, destination, status, message, completed_at::text FROM backup_runs ORDER BY created_at DESC LIMIT 20`,
+  );
+  const { buildBackupStatus } = await import("./backup-status");
+  const cloudLastRun = history.find((run) => run.destination === "nuvem")?.status ?? null;
+  const overview = buildBackupStatus({
+    externalLastSuccess: settings?.external_last_success_at
+      ? new Date(settings.external_last_success_at)
+      : null,
+    cloudLastRunStatus: cloudLastRun,
+  });
+  return { settings: settings ?? null, history, overview };
+});
+
+export const saveBackupSettings = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z
+      .object({
+        cloudBackupDirectory: z.string().trim().nullable(),
+        externalBackupDirectory: z.string().trim().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    await auth();
+    const q = await sql();
+    await q(
+      `UPDATE backup_settings SET cloud_backup_dir=$1, external_backup_dir=$2, updated_at=now() WHERE id=true`,
+      [data.cloudBackupDirectory || null, data.externalBackupDirectory || null],
+    );
+    return { ok: true as const };
+  });
+
 // ---------- Shared SQL ----------
 const INVOICE_STATUS = `CASE WHEN i.status = 'aberta' AND i.due_date < current_date THEN 'vencida' ELSE i.status END`;
 const HOLDER_STATUS = `CASE WHEN h.status = 'cancelado' THEN 'cancelado'

@@ -1,7 +1,15 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, LogOut, Users, Layers, Receipt, LayoutDashboard } from "lucide-react";
+import {
+  ShieldCheck,
+  LogOut,
+  Users,
+  Layers,
+  Receipt,
+  LayoutDashboard,
+  HardDrive,
+} from "lucide-react";
 import { checkForUpdate, logout } from "../lib/api.functions";
 import type { AvailableRelease } from "../lib/update-rules";
 import { errorMessage } from "../lib/error-message";
@@ -10,7 +18,7 @@ import { UpdateNotice } from "./update-notice";
 
 interface AppLayoutProps {
   children: ReactNode;
-  activeTab?: "dashboard" | "holders" | "plans" | "invoices";
+  activeTab?: "dashboard" | "holders" | "plans" | "invoices" | "backups";
   user?: { id: number; name: string; email: string } | null;
 }
 
@@ -43,6 +51,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
     { id: "holders", label: "Titulares", to: "/holders", icon: Users },
     { id: "plans", label: "Planos", to: "/plans", icon: Layers },
     { id: "invoices", label: "Faturas", to: "/invoices", icon: Receipt },
+    { id: "backups", label: "Backups", to: "/backups", icon: HardDrive },
   ];
 
   return (

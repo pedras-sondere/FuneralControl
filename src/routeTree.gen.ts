@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BackupsRouteImport } from './routes/backups'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HoldersIndexRouteImport } from './routes/holders/index'
 import { Route as HoldersIdRouteImport } from './routes/holders/$id'
@@ -20,6 +21,11 @@ import { Route as ApiContractsIdRouteImport } from './routes/api/contracts.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BackupsRoute = BackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -55,6 +61,7 @@ const ApiContractsIdRoute = ApiContractsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/login': typeof LoginRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders/': typeof HoldersIndexRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/login': typeof LoginRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders': typeof HoldersIndexRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/login': typeof LoginRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders/': typeof HoldersIndexRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/backups'
     | '/login'
     | '/holders/$id'
     | '/holders/'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/backups'
     | '/login'
     | '/holders/$id'
     | '/holders'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/backups'
     | '/login'
     | '/holders/$id'
     | '/holders/'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BackupsRoute: typeof BackupsRoute
   LoginRoute: typeof LoginRoute
   HoldersIdRoute: typeof HoldersIdRoute
   HoldersIndexRoute: typeof HoldersIndexRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backups': {
+      id: '/backups'
+      path: '/backups'
+      fullPath: '/backups'
+      preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BackupsRoute: BackupsRoute,
   LoginRoute: LoginRoute,
   HoldersIdRoute: HoldersIdRoute,
   HoldersIndexRoute: HoldersIndexRoute,
