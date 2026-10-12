@@ -23,7 +23,7 @@ Sistema interno, visual limpo (fundo claro, tipografia sóbria, tom azul-petról
 ## Operação local e detalhes técnicos
 
 - O sistema é executado localmente em um único computador Windows, pelo atalho `FuneralControl`, abrindo no navegador em `localhost`.
-- O instalador inicial baixa Node.js e PostgreSQL, configura o banco local e preserva os dados ao ser executado novamente. Não há hospedagem, VPS, Cloudflare, Lovable ou OAuth nesta operação.
+- O instalador inicial baixa Node.js e PostgreSQL, configura o banco local e preserva os dados ao ser executado novamente. Não há hospedagem, VPS, OAuth ou serviços externos de execução nesta operação.
 - Banco PostgreSQL acessado via `DATABASE_URL` com SQL parametrizado; a estratégia de migração será versionada no repositório.
 - Autenticação própria da equipe: usuários com senha (hash scrypt) e sessão por cookie httpOnly; sem cadastro público (usuário admin inicial via variáveis de ambiente).
 - Contratos digitalizados salvos em pasta privada local configurável, servidos apenas para usuários logados.
