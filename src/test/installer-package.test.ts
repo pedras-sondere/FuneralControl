@@ -12,6 +12,7 @@ describe("pacote do instalador Windows", () => {
     );
 
     expect(definition).toContain("PrivilegesRequired=admin");
+    expect(definition).not.toContain("PrivilegesRequiredOverridesAllowed");
     expect(definition).toContain("Install-FuneralControl.ps1");
     expect(definition).toContain("FuneralControl");
   });
