@@ -1,7 +1,8 @@
 import pg from "pg";
 import { hashPassword } from "./password.server";
+import { readAdminConfig, readDatabaseConfig } from "./runtime-config.server";
 
-let pool: pg.Pool | undefined;
+let client: pg.Pool | undefined;
 let ready: Promise<void> | undefined;
 
 const SCHEMA = `
@@ -48,6 +49,8 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
   birth_date date,
   relationship text NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS beneficiaries_cpf_unique
+  ON beneficiaries (cpf) WHERE cpf IS NOT NULL;
 CREATE TABLE IF NOT EXISTS contracts (
   id serial PRIMARY KEY,
   holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
@@ -69,40 +72,90 @@ CREATE TABLE IF NOT EXISTS invoices (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (holder_id, reference_month)
 );
+CREATE TABLE IF NOT EXISTS backup_settings (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id),
+  local_backup_dir text,
+  cloud_backup_dir text,
+  external_backup_dir text,
+  external_last_success_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS backup_runs (
+  id serial PRIMARY KEY,
+  destination text NOT NULL CHECK (destination IN ('local', 'nuvem', 'externo')),
+  status text NOT NULL CHECK (status IN ('sucesso', 'falha')),
+  archive_path text,
+  archive_sha256 text,
+  message text,
+  initiated_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
 `;
 
-async function init(p: pg.Pool) {
-  await p.query(SCHEMA);
-  const { rows } = await p.query("SELECT count(*)::int AS n FROM users");
-  if (rows[0].n === 0) {
-    const email = process.env["ADMIN_EMAIL"] ?? "admin@admin.com";
-    const password = process.env["ADMIN_PASSWORD"] ?? "admin123";
-    await p.query("INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3)", [
+async function init(dbClient: pg.Pool) {
+  await dbClient.query(SCHEMA);
+  await dbClient.query(
+    "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
+  );
+  await dbClient.query(
+    "INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
+  );
+
+  // Cria usuário administrador inicial se não existir.
+  const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");
+  if (Number(rows[0]?.n || 0) === 0) {
+    const { email, password } = readAdminConfig(process.env);
+    await dbClient.query("INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3)", [
       "Administrador",
       email.toLowerCase(),
       await hashPassword(password),
     ]);
+    console.log("[Banco de Dados] Usuário administrador inicial criado.");
+  }
+
+  // Cria planos padrão se o banco estiver vazio
+  const planRows = await dbClient.query("SELECT count(*)::int AS n FROM plans");
+  if (Number(planRows.rows?.[0]?.n || planRows[0]?.n || 0) === 0) {
+    await dbClient.query(`
+      INSERT INTO plans (name, monthly_price, max_beneficiaries, description, active) VALUES
+      ('Plano Individual Essencial', 35.00, 0, 'Cobertura funeral completa individual com assistência 24h', true),
+      ('Plano Familiar Prata', 65.00, 3, 'Cobertura funeral para o titular e até 3 dependentes diretos', true),
+      ('Plano Familiar Ouro', 95.00, 6, 'Cobertura funeral ampla para o titular e até 6 dependentes', true)
+    `);
+    console.log("[Banco de Dados] Planos iniciais cadastrados com sucesso.");
   }
 }
 
-export async function db(): Promise<pg.Pool> {
-  if (!pool) {
-    const url = process.env["DATABASE_URL"];
-    if (!url) throw new Error("DATABASE_URL não configurada");
-    pool = new pg.Pool({
-      connectionString: url,
-      ssl: process.env["DATABASE_SSL"] === "true" ? { rejectUnauthorized: false } : undefined,
+export async function db() {
+  if (!client) {
+    const config = readDatabaseConfig(process.env);
+    const pool = new pg.Pool({ ...config, connectionTimeoutMillis: 1500 });
+    try {
+      await pool.query("SELECT 1");
+    } catch (error) {
+      await pool.end().catch(() => undefined);
+      throw new Error(
+        "Não foi possível conectar ao PostgreSQL. Verifique se o serviço está ativo e se DATABASE_URL está correta.",
+        { cause: error },
+      );
+    }
+    client = pool;
+    console.log("[Banco de Dados] Conectado ao servidor PostgreSQL.");
+  }
+
+  if (!ready) {
+    ready = init(client).catch((e) => {
+      ready = undefined;
+      throw e;
     });
   }
-  if (!ready) ready = init(pool).catch((e) => {
-    ready = undefined;
-    throw e;
-  });
   await ready;
-  return pool;
+  return client;
 }
 
-export async function q<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
+export async function q<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   const p = await db();
   const r = await p.query(sql, params);
   return r.rows as T[];

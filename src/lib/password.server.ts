@@ -1,9 +1,7 @@
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
 function scryptAsync(pw: string, salt: string): Promise<Buffer> {
-  return new Promise((res, rej) =>
-    scrypt(pw, salt, 64, (err, key) => (err ? rej(err) : res(key))),
-  );
+  return new Promise((res, rej) => scrypt(pw, salt, 64, (err, key) => (err ? rej(err) : res(key))));
 }
 
 export async function hashPassword(pw: string) {
