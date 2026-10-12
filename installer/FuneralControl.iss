@@ -19,7 +19,7 @@ SolidCompression=yes
 Uninstallable=no
 
 [Files]
-Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: ".git\*,.codex\*,.superpowers\*,node_modules\*,dist\*,.env,uploads\*,data\*,backups\*,release\*"
+Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: ".git\*,.codex\*,.superpowers\*,.wrangler\*,node_modules\*,dist\*,.output\*,.env,GEMINI.md,uploads\*,data\*,backups\*,release\*"
 
 [Run]
 Filename: "{cmd}"; Parameters: "/C powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-FuneralControl.ps1"" -InstallRoot ""{app}"""; Flags: waituntilterminated runhidden
