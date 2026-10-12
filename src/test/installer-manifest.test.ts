@@ -23,4 +23,17 @@ describe("pré-verificação do instalador Windows", () => {
 
     expect(JSON.parse(stdout)).toMatchObject({ ok: true, checks: { windows: true } });
   }, 15_000);
+
+  it("encerra com código zero quando todas as verificações forem aprovadas", async () => {
+    const command = `$global:LASTEXITCODE = 1; & '${scriptPath.replaceAll("'", "''")}' -SkipInternet -SkipDisk -SkipAdmin -AsJson; exit $LASTEXITCODE`;
+    const { stdout } = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      command,
+    ]);
+
+    expect(JSON.parse(stdout)).toMatchObject({ ok: true });
+  }, 15_000);
 });

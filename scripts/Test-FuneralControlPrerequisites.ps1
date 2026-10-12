@@ -47,3 +47,4 @@ else {
   else { $errors | ForEach-Object { Write-Error $_ } }
 }
 if (-not $result.ok) { exit 1 }
+exit 0
