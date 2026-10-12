@@ -119,4 +119,15 @@ describe("bootstrap da instalação local", () => {
     expect(installerScript).toContain("'\\s' + [regex]::Escape($fileName) + '$'");
     expect(installerScript).toContain("if (-not $checksumLine)");
   });
+
+  it("não mistura a saída do winget com a senha temporária do PostgreSQL", async () => {
+    const installerScript = await readFile(
+      path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+      "utf8",
+    );
+
+    expect(installerScript).toContain("& winget.exe @arguments | Out-Host");
+    expect(installerScript).toContain("postgres-bootstrap.secret");
+    expect(installerScript).toContain("Remove-Item -LiteralPath $postgresBootstrapSecretPath");
+  });
 });

@@ -67,6 +67,28 @@ function New-LocalSecret {
   -join (1..32 | ForEach-Object { $alphabet[(Get-Random -Maximum $alphabet.Length)] })
 }
 
+function Get-PostgresBootstrapSecretPath([string]$Root) {
+  Join-Path $Root 'postgres-bootstrap.secret'
+}
+
+function Get-PendingPostgresAdminPassword([string]$Root) {
+  $secretPath = Get-PostgresBootstrapSecretPath $Root
+  if (-not (Test-Path -LiteralPath $secretPath -PathType Leaf)) { return $null }
+  $secret = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+  if ([string]::IsNullOrWhiteSpace($secret)) {
+    throw 'A recuperação da instalação do PostgreSQL está vazia. Remova a instalação parcial e execute novamente o instalador.'
+  }
+  return $secret
+}
+
+function Save-PendingPostgresAdminPassword([string]$Root, [string]$Password) {
+  New-Item -ItemType Directory -Path $Root -Force | Out-Null
+  $secretPath = Get-PostgresBootstrapSecretPath $Root
+  Set-Content -LiteralPath $secretPath -Value $Password -Encoding ascii -NoNewline
+  & icacls $secretPath '/inheritance:r' '/grant:r=BUILTIN\Administrators:(F)' '/grant:r=SYSTEM:(F)' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger a recuperação da instalação do PostgreSQL.' }
+}
+
 function Install-Node {
   $node = Get-Command node.exe -ErrorAction SilentlyContinue
   if ($node) {
@@ -101,8 +123,9 @@ function Install-Node {
   if ($major -lt 20) { throw 'A versão instalada do Node.js não é compatível com o FuneralControl.' }
 }
 
-function Install-PostgreSQL {
-  if (Get-PostgresBin) { return $false }
+function Install-PostgreSQL([string]$Root) {
+  $pendingPassword = Get-PendingPostgresAdminPassword $Root
+  if (Get-PostgresBin) { return $pendingPassword }
   if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
     throw 'O Windows Package Manager não está disponível para instalar o PostgreSQL. Instale o PostgreSQL e execute novamente o instalador.'
   }
@@ -112,7 +135,8 @@ function Install-PostgreSQL {
     '--accept-source-agreements', '--accept-package-agreements',
     '--override', ("--mode unattended --unattendedmodeui none --superpassword " + $adminPassword)
   )
-  & winget.exe @arguments
+  Save-PendingPostgresAdminPassword -Root $Root -Password $adminPassword
+  & winget.exe @arguments | Out-Host
   if ($LASTEXITCODE -ne 0) { throw 'Não foi possível instalar o PostgreSQL.' }
   if (-not (Get-PostgresBin)) { throw 'O PostgreSQL foi instalado, mas suas ferramentas não foram encontradas.' }
   return $adminPassword
@@ -165,12 +189,14 @@ if (-not (Test-Path -LiteralPath $buildEntry -PathType Leaf)) {
 Install-Node
 $configPath = Join-Path $InstallRoot '.env'
 if (-not (Test-Path -LiteralPath $configPath)) {
-  $postgresAdminPassword = Install-PostgreSQL
-  if ([string]::IsNullOrWhiteSpace($postgresAdminPassword)) {
-    throw 'O PostgreSQL existente não possui uma configuração do FuneralControl. Instale-o novamente ou solicite a senha administrativa do banco para a configuração inicial.'
+  $postgresAdminPassword = Install-PostgreSQL -Root $DataRoot
+  if ($postgresAdminPassword -isnot [string] -or [string]::IsNullOrWhiteSpace($postgresAdminPassword)) {
+    throw 'Foi encontrado um PostgreSQL sem dados de recuperação do FuneralControl. Para proteger um banco existente, a configuração automática foi interrompida.'
   }
   & (Join-Path $scriptRoot 'Configure-FuneralControlDatabase.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -PostgresAdminPassword $postgresAdminPassword
   if ($LASTEXITCODE -ne 0) { throw 'A configuração do banco de dados não foi concluída.' }
+  $postgresBootstrapSecretPath = Get-PostgresBootstrapSecretPath $DataRoot
+  Remove-Item -LiteralPath $postgresBootstrapSecretPath -Force -ErrorAction SilentlyContinue
 } else {
   Write-Host 'A configuração existente do FuneralControl foi preservada.'
 }
