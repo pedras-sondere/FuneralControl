@@ -36,7 +36,8 @@ if ($postgresService.Status -ne 'Running') {
 try {
   Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 2 | Out-Null
 } catch {
-  Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'npm run dev' -WorkingDirectory $InstallRoot -WindowStyle Hidden
+  $startCommand = "set \"FUNERALCONTROL_INSTALL_ROOT=$InstallRoot\" && npm run dev"
+  Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startCommand -WorkingDirectory $InstallRoot -WindowStyle Hidden
 }
 
 for ($attempt = 0; $attempt -lt 30; $attempt++) {

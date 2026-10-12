@@ -34,6 +34,7 @@ $rollbackPath = "$InstallRoot.previous"
 
 try {
   New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+  Start-Sleep -Seconds 3
   Invoke-WebRequest -Uri $PackageUrl -OutFile $archivePath -UseBasicParsing
   $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($actualHash -ne $Sha256.ToLowerInvariant()) { throw 'A conferência de segurança do pacote falhou.' }
