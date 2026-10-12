@@ -40,6 +40,13 @@ if ($DryRun) {
   exit 0
 }
 
+$logRoot = Join-Path $DataRoot 'logs'
+New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+$logPath = Join-Path $logRoot 'instalacao.log'
+Start-Transcript -Path $logPath -Append | Out-Null
+$logStarted = $true
+Write-Host 'Iniciando a preparação local do FuneralControl.'
+
 function Get-PostgresBin {
   $psql = Get-Command psql.exe -ErrorAction SilentlyContinue
   if ($psql) { return (Split-Path -Parent $psql.Source) }
@@ -131,13 +138,6 @@ if (-not $SkipPrerequisites) {
 if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) {
   throw 'A pasta de instalação do FuneralControl não foi encontrada.'
 }
-
-$logRoot = Join-Path $DataRoot 'logs'
-New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-$logPath = Join-Path $logRoot 'instalacao.log'
-Start-Transcript -Path $logPath -Append | Out-Null
-$logStarted = $true
-Write-Host 'Iniciando a preparação local do FuneralControl.'
 
 $buildEntry = Join-Path $InstallRoot 'dist\server\server.js'
 if (-not (Test-Path -LiteralPath $buildEntry -PathType Leaf)) {
