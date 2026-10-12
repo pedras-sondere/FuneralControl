@@ -36,7 +36,17 @@ if ($postgresService.Status -ne 'Running') {
 try {
   Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 2 | Out-Null
 } catch {
-  $startCommand = "set \"FUNERALCONTROL_INSTALL_ROOT=$InstallRoot\" && npm run dev"
+  $psqlCommand = Get-Command psql.exe -ErrorAction SilentlyContinue
+  $postgresBin = if ($psqlCommand) { Split-Path -Parent $psqlCommand.Source } else { $null }
+  if (-not $postgresBin) {
+    $postgresRoot = Join-Path $env:ProgramFiles 'PostgreSQL'
+    $psqlFile = if (Test-Path -LiteralPath $postgresRoot) {
+      Get-ChildItem -Path $postgresRoot -Filter psql.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($psqlFile) { $postgresBin = Split-Path -Parent $psqlFile.FullName }
+  }
+  if (-not $postgresBin) { throw 'As ferramentas do PostgreSQL não foram encontradas. Execute novamente o instalador.' }
+  $startCommand = 'set "PATH=' + $postgresBin + ';%PATH%" && set "FUNERALCONTROL_INSTALL_ROOT=' + $InstallRoot + '" && npm run start'
   Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startCommand -WorkingDirectory $InstallRoot -WindowStyle Hidden
 }
 
