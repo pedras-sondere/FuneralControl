@@ -26,4 +26,15 @@ describe("pacote do instalador Windows", () => {
     expect(definition).not.toMatch(/DATABASE_URL=.*:/i);
     expect(definition).not.toMatch(/superpassword/i);
   });
+
+  it("exclui artefatos temporários e arquivos pessoais da mídia de instalação", async () => {
+    const definition = await readFile(
+      path.join(projectRoot, "installer", "FuneralControl.iss"),
+      "utf8",
+    );
+
+    expect(definition).toContain(".output\\*");
+    expect(definition).toContain(".wrangler\\*");
+    expect(definition).toContain("GEMINI.md");
+  });
 });
