@@ -39,3 +39,9 @@ npm run dev
 - Configure as três pastas em **Backups**. A pasta de nuvem deve ser uma pasta já sincronizada pelo Google Drive, OneDrive ou serviço equivalente.
 - Ao sair ou após duas horas sem uso, o sistema tenta criar cópias nos destinos configurados e registra o resultado. O HD externo deve receber uma cópia validada a cada 10 dias; após esse prazo, novos cadastros e alterações ficam bloqueados até a regularização.
 - O aplicativo consulta atualizações do GitHub somente uma vez ao iniciar. Quando houver uma versão disponível, o gestor escolhe **Atualizar sistema**. Em uma instalação feita pelo atalho do Windows, o sistema cria antes um backup local validado, confere o pacote e reinicia após a atualização. Dados, documentos, banco e backups são preservados.
+
+## Instalador Windows
+
+O arquivo `installer/FuneralControl.iss` gera o instalador `.exe` pelo Inno Setup em um computador Windows. A instalação inicial exige internet e permissões de administrador. Ela verifica os requisitos, instala Node.js e PostgreSQL quando necessário, cria o banco local e deixa apenas o atalho **FuneralControl** na área de trabalho.
+
+Antes de considerar a instalação concluída, confirme: conexão ao PostgreSQL, disponibilidade do `pg_dump`, abertura em `http://localhost:3000` e configuração das três pastas de backup. Reexecutar o instalador preserva o banco, `.env`, documentos e backups já existentes.

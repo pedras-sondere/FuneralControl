@@ -20,11 +20,13 @@ Sistema interno, visual limpo (fundo claro, tipografia sóbria, tom azul-petról
 - Fatura em aberto após o vencimento aparece como **vencida**.
 - Titular com fatura vencida aparece como **inadimplente**.
 
-## Detalhes técnicos
+## Operação local e detalhes técnicos
 
-- Desenvolvimento local com app TanStack Start rodando em Node e PostgreSQL local; o deploy em VPS será feito posteriormente a partir do GitHub.
+- O sistema é executado localmente em um único computador Windows, pelo atalho `FuneralControl`, abrindo no navegador em `localhost`.
+- O instalador inicial baixa Node.js e PostgreSQL, configura o banco local e preserva os dados ao ser executado novamente. Não há hospedagem, VPS, Cloudflare, Lovable ou OAuth nesta operação.
 - Banco PostgreSQL acessado via `DATABASE_URL` com SQL parametrizado; a estratégia de migração será versionada no repositório.
 - Autenticação própria da equipe: usuários com senha (hash scrypt) e sessão por cookie httpOnly; sem cadastro público (usuário admin inicial via variáveis de ambiente).
-- Contratos digitalizados salvos em pasta privada local configurável, servidos apenas para usuários logados; no deploy, a pasta será um volume persistente da VPS.
-- Tabelas: users, sessions, plans, holders, beneficiaries, contracts (arquivo), invoices.
+- Contratos digitalizados salvos em pasta privada local configurável, servidos apenas para usuários logados.
+- Backups ZIP validados incluem dump PostgreSQL, documentos e configuração. Há cópia local, cópia em pasta sincronizada com nuvem e cópia obrigatória no HD externo a cada 10 dias.
+- Tabelas: users, sessions, plans, holders, beneficiaries, contracts (arquivo), invoices, backup_settings, backup_runs.
 - Rotas protegidas sob layout autenticado; leituras via server functions com React Query, todas verificando a sessão.
