@@ -19,13 +19,43 @@ SolidCompression=yes
 Uninstallable=no
 
 [Files]
-Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: ".git\*,.codex\*,.superpowers\*,.wrangler\*,node_modules\*,dist\*,.output\*,.env,GEMINI.md,uploads\*,data\*,backups\*,release\*"
-
-[Run]
-Filename: "{cmd}"; Parameters: "/C powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-FuneralControl.ps1"" -InstallRoot ""{app}"""; Flags: waituntilterminated runhidden
+Source: "..\dist\*"; DestDir: "{app}\dist"; Flags: recursesubdirs createallsubdirs
+Source: "..\scripts\*"; DestDir: "{app}\scripts"; Flags: recursesubdirs createallsubdirs
+Source: "..\package.json"; DestDir: "{app}"
+Source: "..\package-lock.json"; DestDir: "{app}"
+Source: "..\FuneralControl.cmd"; DestDir: "{app}"
 
 [Code]
-function InitializeSetup(): Boolean;
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  InstallRoot: String;
 begin
-  Result := True;
+  if CurStep <> ssPostInstall then
+    Exit;
+
+  InstallRoot := ExpandConstant('{app}');
+  WizardForm.StatusLabel.Caption := 'Preparando Node.js, PostgreSQL e o banco local. Esta etapa pode levar alguns minutos.';
+
+  if not Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -ExecutionPolicy Bypass -File "' + InstallRoot + '\scripts\Install-FuneralControl.ps1" -InstallRoot "' + InstallRoot + '"',
+    '',
+    SW_SHOW,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then begin
+    MsgBox('Não foi possível iniciar a configuração local. Consulte o suporte.', mbError, MB_OK);
+    Abort;
+  end;
+
+  if ResultCode <> 0 then begin
+    MsgBox(
+      'A preparação do FuneralControl não foi concluída. Nenhum atalho foi criado.' + #13#10 +
+      'Consulte o arquivo C:\\ProgramData\\FuneralControl\\logs\\instalacao.log e execute novamente o instalador.',
+      mbError,
+      MB_OK
+    );
+    Abort;
+  end;
 end;

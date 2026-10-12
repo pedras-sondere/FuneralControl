@@ -27,14 +27,28 @@ describe("pacote do instalador Windows", () => {
     expect(definition).not.toMatch(/superpassword/i);
   });
 
-  it("exclui artefatos temporários e arquivos pessoais da mídia de instalação", async () => {
+  it("inclui somente os arquivos necessários para executar o sistema local", async () => {
     const definition = await readFile(
       path.join(projectRoot, "installer", "FuneralControl.iss"),
       "utf8",
     );
 
-    expect(definition).toContain(".output\\*");
-    expect(definition).toContain(".wrangler\\*");
-    expect(definition).toContain("GEMINI.md");
+    expect(definition).toContain('Source: "..\\dist\\*"');
+    expect(definition).toContain('Source: "..\\scripts\\*"');
+    expect(definition).toContain('Source: "..\\package.json"');
+    expect(definition).toContain('Source: "..\\package-lock.json"');
+    expect(definition).not.toContain('Source: "..\\*"');
+    expect(definition).not.toContain("runhidden");
+  });
+
+  it("interrompe a instalação quando a configuração local falhar", async () => {
+    const definition = await readFile(
+      path.join(projectRoot, "installer", "FuneralControl.iss"),
+      "utf8",
+    );
+
+    expect(definition).toContain("CurStepChanged");
+    expect(definition).toContain("ewWaitUntilTerminated");
+    expect(definition).toMatch(/resultCode <> 0/i);
   });
 });
