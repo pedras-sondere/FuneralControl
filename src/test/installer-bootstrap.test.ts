@@ -152,4 +152,16 @@ describe("bootstrap da instalação local", () => {
     expect(installerScript).toContain("Get-FileHash -LiteralPath $installerPath -Algorithm SHA256");
     expect(installerScript).not.toContain("& winget.exe @arguments");
   });
+
+  it("registra o diagnóstico do PostgreSQL sem registrar a senha técnica", async () => {
+    const databaseScript = await readFile(
+      path.join(projectRoot, "scripts", "Configure-FuneralControlDatabase.ps1"),
+      "utf8",
+    );
+
+    expect(databaseScript).toContain("$authenticationOutput = @(& $psql");
+    expect(databaseScript).toContain("Detalhes do PostgreSQL:");
+    expect(databaseScript).not.toContain("Write-Host $PostgresAdminPassword");
+    expect(databaseScript).toContain("*S-1-5-32-544:(F)");
+  });
 });

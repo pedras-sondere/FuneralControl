@@ -63,8 +63,14 @@ $createdb = Join-Path $postgresBin 'createdb.exe'
 $oldPassword = $env:PGPASSWORD
 $env:PGPASSWORD = $PostgresAdminPassword
 try {
-  & $psql '-h' '127.0.0.1' '-U' 'postgres' '-d' 'postgres' '-v' 'ON_ERROR_STOP=1' '-c' 'SELECT 1;' | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw 'Não foi possível autenticar no PostgreSQL local.' }
+  $authenticationOutput = @(& $psql '-h' '127.0.0.1' '-U' 'postgres' '-d' 'postgres' '-v' 'ON_ERROR_STOP=1' '-c' 'SELECT 1;' 2>&1)
+  if ($LASTEXITCODE -ne 0) {
+    $authenticationDetails = ($authenticationOutput |
+      ForEach-Object { $_.ToString().Trim() } |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+    if ([string]::IsNullOrWhiteSpace($authenticationDetails)) { $authenticationDetails = 'O PostgreSQL não retornou uma mensagem adicional.' }
+    throw ('Não foi possível autenticar no PostgreSQL local. Detalhes do PostgreSQL: ' + $authenticationDetails)
+  }
 
   $roleSql = "DO `$`$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$databaseUser') THEN CREATE ROLE $databaseUser LOGIN PASSWORD '$DatabasePassword'; END IF; END `$`$;"
   & $psql '-h' '127.0.0.1' '-U' 'postgres' '-d' 'postgres' '-v' 'ON_ERROR_STOP=1' '-c' $roleSql | Out-Null
@@ -89,5 +95,6 @@ $config = @(
   ('UPLOAD_DIR=' + (Join-Path $DataRoot 'uploads'))
 )
 Set-Content -LiteralPath $configPath -Value $config -Encoding utf8 -NoNewline
-& icacls $configPath '/inheritance:r' ("/grant:r=$env:USERNAME`:(R,W)") '/grant:r=BUILTIN\Administrators:(F)' | Out-Null
+& icacls.exe $configPath '/inheritance:r' ("/grant:r=$env:USERNAME`:(R,W)") '/grant:r' '*S-1-5-32-544:(F)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger a configuração local do FuneralControl.' }
 Write-Host 'Banco de dados local configurado com sucesso.'
