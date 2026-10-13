@@ -120,15 +120,13 @@ describe("bootstrap da instalação local", () => {
     expect(installerScript).toContain("if (-not $checksumLine)");
   });
 
-  it("não mistura a saída do winget com a senha temporária do PostgreSQL", async () => {
+  it("não usa winget para instalar ou configurar o PostgreSQL", async () => {
     const installerScript = await readFile(
       path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
       "utf8",
     );
 
-    expect(installerScript).toContain("& winget.exe @arguments | Out-Host");
-    expect(installerScript).toContain("postgres-bootstrap.secret");
-    expect(installerScript).toContain("Remove-Item -LiteralPath $postgresBootstrapSecretPath");
+    expect(installerScript).not.toContain("winget.exe");
   });
 
   it("protege a recuperação do PostgreSQL sem depender do idioma do Windows", async () => {
