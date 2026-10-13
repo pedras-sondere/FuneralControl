@@ -25,11 +25,13 @@ try {
     throw "O staging não contém as dependências de produção."
   }
   $manifest = @{ version = $Version; schemaVersion = 1; generatedAt = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json
-  Set-Content -LiteralPath (Join-Path $staging 'runtime-manifest.json') -Value $manifest -Encoding utf8NoBOM
+  Set-Content -LiteralPath (Join-Path $staging 'runtime-manifest.json') -Value $manifest -Encoding UTF8
   $forbidden = @('.env', '.git', 'src', 'docs', 'tests', 'docker-compose.yml', '.wrangler', '.superpowers')
   foreach ($name in $forbidden) { if (Test-Path (Join-Path $staging $name)) { throw "Conteúdo proibido no runtime: $name" } }
   Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
-  Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $archivePath -CompressionLevel Optimal
+  # ZipFile evita o bloqueio observado no Compress-Archive do PowerShell 5.1
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [IO.Compression.ZipFile]::CreateFromDirectory($staging, $archivePath, [IO.Compression.CompressionLevel]::Optimal, $false)
   $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
   $result = @{ archivePath = $archivePath; sha256 = $hash; version = $Version; schemaVersion = 1; size = (Get-Item $archivePath).Length }
   if ($AsJson) { $result | ConvertTo-Json -Compress } else { $result }
