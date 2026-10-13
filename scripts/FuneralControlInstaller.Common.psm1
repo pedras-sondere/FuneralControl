@@ -35,6 +35,12 @@ function Set-FuneralControlPhase {
   $directory = Split-Path -Parent $StatePath
   New-Item -ItemType Directory -Path $directory -Force | Out-Null
   $payload = [ordered]@{ format = 2; phase = $Phase; updatedAt = (Get-Date).ToUniversalTime().ToString('o') }
+  $existing = Read-FuneralControlState -StatePath $StatePath
+  if ($existing) {
+    foreach ($property in $existing.PSObject.Properties) {
+      if ($property.Name -notin @('format', 'phase', 'updatedAt')) { $payload[$property.Name] = $property.Value }
+    }
+  }
   foreach ($key in $State.Keys) { $payload[$key] = $State[$key] }
   $temporary = "$StatePath.$([guid]::NewGuid()).tmp"
   $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding UTF8
@@ -44,12 +50,16 @@ function Set-FuneralControlPhase {
 function Expand-FuneralControlSafeArchive {
   param([Parameter(Mandatory)][string]$Archive, [Parameter(Mandatory)][string]$Destination)
   Add-Type -AssemblyName System.IO.Compression.FileSystem
-  $fullDestination = [IO.Path]::GetFullPath($Destination)
+  $fullDestination = [IO.Path]::GetFullPath($Destination).TrimEnd('\\', '/')
+  $destinationPrefix = $fullDestination + [IO.Path]::DirectorySeparatorChar
+  New-Item -ItemType Directory -Path $fullDestination -Force | Out-Null
   $zip = [IO.Compression.ZipFile]::OpenRead($Archive)
   try {
     foreach ($entry in $zip.Entries) {
-      $target = [IO.Path]::GetFullPath((Join-Path $fullDestination $entry.FullName))
-      if (-not $target.StartsWith($fullDestination, [StringComparison]::OrdinalIgnoreCase)) { throw 'Arquivo ZIP contém caminho inválido.' }
+      $entryPath = $entry.FullName.Replace('/', [IO.Path]::DirectorySeparatorChar).Replace('\\', [IO.Path]::DirectorySeparatorChar)
+      if ([IO.Path]::IsPathRooted($entryPath)) { throw 'Arquivo ZIP contém caminho absoluto inválido.' }
+      $target = [IO.Path]::GetFullPath((Join-Path $fullDestination $entryPath))
+      if ($target -ne $fullDestination -and -not $target.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Arquivo ZIP contém caminho inválido.' }
     }
     [IO.Compression.ZipFileExtensions]::ExtractToDirectory($zip, $fullDestination, $true)
   } finally { $zip.Dispose() }

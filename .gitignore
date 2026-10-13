@@ -23,8 +23,11 @@ dist-ssr
 
 # Environment & Uploads
 .env
+release-private-key.pem
+*.private.pem
 uploads/
 data/
+release/
 
 # Editor directories and files
 .vscode/*

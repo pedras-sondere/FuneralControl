@@ -6,7 +6,10 @@ const root = path.resolve(import.meta.dirname, "../..");
 
 describe("base do instalador v2", () => {
   it("define estado retomável e porta privada sem procurar serviços globais", async () => {
-    const source = await readFile(path.join(root, "scripts", "FuneralControlInstaller.Common.psm1"), "utf8");
+    const source = await readFile(
+      path.join(root, "scripts", "FuneralControlInstaller.Common.psm1"),
+      "utf8",
+    );
     expect(source).toContain("54329");
     expect(source).toContain("shortcutCreated");
     expect(source).toContain("Expand-FuneralControlSafeArchive");

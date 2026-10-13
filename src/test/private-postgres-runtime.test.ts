@@ -13,6 +13,10 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain("RuntimePostgresRoot");
     expect(script).toContain("54329");
     expect(script).toContain("initdb.exe");
+    expect(script).toContain("CREATE ROLE funeralcontrol_app");
+    expect(script).toContain("CREATE DATABASE funeralcontrol");
+    expect(script).toContain("PGPASSWORD");
+    expect(script).toContain("ConvertFrom-SecureString");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");
     expect(script).not.toContain("--superpassword");
