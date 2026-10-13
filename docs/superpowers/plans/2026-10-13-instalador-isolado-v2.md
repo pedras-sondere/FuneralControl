@@ -144,6 +144,7 @@ Use Node crypto Ed25519 to sign canonical manifest bytes. Commit only the public
 - Create: src/test/installer-v2-common.test.ts
 - Modify: src/test/installer-manifest.test.ts
 - Modify: src/test/installer-bootstrap.test.ts
+- Modify: vitest.config.ts
 
 **Interfaces:**
 - Produces Get-FuneralControlPaths -InstallRoot <path> -DataRoot <path>, returning known app/runtime/state/config/log/staging paths and port 54329.
@@ -162,20 +163,24 @@ Use Node crypto Ed25519 to sign canonical manifest bytes. Commit only the public
     Run: npm test -- src/test/installer-v2-common.test.ts src/test/installer-manifest.test.ts src/test/installer-bootstrap.test.ts
     Expected: FAIL because v2 state, safe extraction, DPAPI configuration, and manifest contracts do not exist.
 
-- [ ] **Step 3: Implement shared PowerShell module and v2 manifest.**
+- [ ] **Step 3: Stabilize the PowerShell test runner before adding v2 script tests.**
+
+First reproduce the existing failure with the normal full suite and confirm that the same PowerShell tests pass with one Vitest worker. Configure the repository to serialize Windows PowerShell child-process tests, because parallel invocations currently terminate with Windows access violation 3221225477. Remove the obsolete test that simultaneously required and prohibited winget; replace it with the v2 prohibition contract.
+
+- [ ] **Step 4: Implement shared PowerShell module and v2 manifest.**
 
 Use pinned Node portable ZIP, PostgreSQL binary ZIP, and release runtime ZIP with HTTPS URL, version, exact byte size, SHA-256, and allowed source host. Store only metadata, active application version, authorized SID, paths and phases in state. Use exclusive temporary files, remove them in finally, quote native invocations safely, capture exit code/stdout/stderr without exposing environment secrets, and set ACLs to authorized user/SYSTEM/Administrators as required.
 
-- [ ] **Step 4: Replace prerequisite checks.**
+- [ ] **Step 5: Replace prerequisite checks.**
 
 Check Windows x64, elevation, available disk on destination/staging drives, each required HTTPS endpoint, and conflicts only on private paths/port. Do not query PATH, Get-Service postgresql, winget, external PostgreSQL directories, or global Node.
 
-- [ ] **Step 5: Run focused tests to verify they pass.**
+- [ ] **Step 6: Run focused tests to verify they pass.**
 
     Run: npm test -- src/test/installer-v2-common.test.ts src/test/installer-manifest.test.ts src/test/installer-bootstrap.test.ts
     Expected: PASS; tests verify no v1 discovery or plaintext secret contract remains.
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 7: Commit.**
 
     git add scripts/FuneralControlInstaller.Common.psm1 scripts/installer-manifest.psd1 scripts/Test-FuneralControlPrerequisites.ps1 src/test
     git commit -m "feat: adicionar base isolada do instalador v2"
