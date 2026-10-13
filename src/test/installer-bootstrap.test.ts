@@ -140,4 +140,16 @@ describe("bootstrap da instalação local", () => {
     expect(installerScript).toContain("*S-1-5-32-544:(F)");
     expect(installerScript).toContain("*S-1-5-18:(F)");
   });
+
+  it("baixa o PostgreSQL oficial e confere o hash sem depender do winget", async () => {
+    const installerScript = await readFile(
+      path.join(projectRoot, "scripts", "Install-FuneralControl.ps1"),
+      "utf8",
+    );
+
+    expect(installerScript).toContain("$manifest.PostgreSQL.InstallerUrl");
+    expect(installerScript).toContain("$manifest.PostgreSQL.InstallerSha256");
+    expect(installerScript).toContain("Get-FileHash -LiteralPath $installerPath -Algorithm SHA256");
+    expect(installerScript).not.toContain("& winget.exe @arguments");
+  });
 });

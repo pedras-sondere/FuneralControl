@@ -126,18 +126,25 @@ function Install-Node {
 function Install-PostgreSQL([string]$Root) {
   $pendingPassword = Get-PendingPostgresAdminPassword $Root
   if (Get-PostgresBin) { return $pendingPassword }
-  if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-    throw 'O Windows Package Manager não está disponível para instalar o PostgreSQL. Instale o PostgreSQL e execute novamente o instalador.'
-  }
   $adminPassword = New-LocalSecret
-  $arguments = @(
-    'install', '--id', $manifest.PostgreSQL.WinGetId, '--exact', '--silent',
-    '--accept-source-agreements', '--accept-package-agreements',
-    '--override', ("--mode unattended --unattendedmodeui none --superpassword " + $adminPassword)
-  )
-  Save-PendingPostgresAdminPassword -Root $Root -Password $adminPassword
-  & winget.exe @arguments | Out-Host
-  if ($LASTEXITCODE -ne 0) { throw 'Não foi possível instalar o PostgreSQL.' }
+  $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ('FuneralControl-postgresql-' + [guid]::NewGuid())
+  New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+  try {
+    $installerPath = Join-Path $temporaryRoot 'postgresql-installer.exe'
+    Write-Host ('Baixando PostgreSQL ' + $manifest.PostgreSQL.Version + ' da fonte oficial.')
+    Invoke-WebRequest -Uri $manifest.PostgreSQL.InstallerUrl -OutFile $installerPath -UseBasicParsing
+    $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
+    if ($actualHash -ne $manifest.PostgreSQL.InstallerSha256) {
+      throw 'A conferência de segurança do instalador do PostgreSQL falhou.'
+    }
+    Save-PendingPostgresAdminPassword -Root $Root -Password $adminPassword
+    $postgresInstaller = Start-Process -FilePath $installerPath -ArgumentList @(
+      '--mode', 'unattended', '--unattendedmodeui', 'none', '--superpassword', $adminPassword
+    ) -Wait -PassThru
+    if ($postgresInstaller.ExitCode -notin @(0, 3010)) { throw 'Não foi possível instalar o PostgreSQL.' }
+  } finally {
+    Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
   if (-not (Get-PostgresBin)) { throw 'O PostgreSQL foi instalado, mas suas ferramentas não foram encontradas.' }
   return $adminPassword
 }
