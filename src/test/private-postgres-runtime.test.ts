@@ -17,6 +17,7 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain("CREATE DATABASE funeralcontrol");
     expect(script).toContain("PGPASSWORD");
     expect(script).toContain("ConvertFrom-SecureString");
+    expect(script).toContain('"*${Sid}:(OI)(CI)F"');
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");
     expect(script).not.toContain("--superpassword");

@@ -38,8 +38,10 @@ function Set-FuneralControlProtectedConfig {
 function Protect-FuneralControlData {
   param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][string]$Sid)
   New-Item -ItemType Directory -Path $Directory -Force | Out-Null
-  & icacls.exe $Directory '/inheritance:r' '/grant:r' "${Sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' | Out-Null
-  Assert-LastExitCode 'proteger os arquivos locais da instalação'
+  $output = & icacls.exe $Directory '/inheritance:r' '/grant:r' "*${Sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível proteger os arquivos locais da instalação (icacls $LASTEXITCODE): $($output -join ' ')"
+  }
 }
 
 $paths = Get-FuneralControlPaths -InstallRoot $InstallRoot -DataRoot $DataRoot
