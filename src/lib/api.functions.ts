@@ -5,7 +5,7 @@ import { isValidCpf, normalizeCpf } from "./cpf";
 import { canAddBeneficiary } from "./business-rules";
 import { errorCode, errorMessage } from "./error-message";
 
-const auth = async () => (await import("./auth.server")).requireUser();
+const auth = async () => (await import("./auth.server")).requireMutableUser();
 const sql = async () => (await import("./db.server")).q;
 const assertMutable = async () => (await import("./backup-guard.server")).requireMutableOperation();
 const cpfSchema = z.string().refine(isValidCpf, "CPF inválido").transform(normalizeCpf);
@@ -30,15 +30,16 @@ export const login = createServerFn({ method: "POST" })
       const q = await sql();
       const { verifyPassword } = await import("./password.server");
       const { createSession } = await import("./auth.server");
-      const rows = await q("SELECT id, password_hash FROM users WHERE email = $1", [
-        data.email.toLowerCase(),
-      ]);
+      const rows = await q(
+        "SELECT id, password_hash, must_change_password FROM users WHERE email = $1",
+        [data.email.toLowerCase()],
+      );
       const u = rows[0];
       if (!u || !(await verifyPassword(data.password, u.password_hash))) {
         return { ok: false as const, error: "E-mail ou senha inválidos" };
       }
       await createSession(u.id);
-      return { ok: true as const };
+      return { ok: true as const, mustChangePassword: Boolean(u.must_change_password) };
     } catch (err: unknown) {
       console.error("Erro no login:", err);
       const message = errorMessage(err, "Erro interno ao processar login");
@@ -60,6 +61,15 @@ export const logout = createServerFn({ method: "POST" }).handler(async () => {
   await destroySession();
   return { ok: true };
 });
+
+export const changePassword = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { changeOwnPassword } = await import("./auth.server");
+    return changeOwnPassword(data);
+  });
 
 type BackupDestination = "local" | "nuvem" | "externo";
 type AutomaticBackupSummary = {
