@@ -13,6 +13,8 @@ describe("base do instalador v2", () => {
     expect(source).toContain("54329");
     expect(source).toContain("shortcutCreated");
     expect(source).toContain("Expand-FuneralControlSafeArchive");
+    expect(source).toContain("TrimEnd('\\', '/')");
+    expect(source).toContain("Replace('\\', [IO.Path]::DirectorySeparatorChar)");
     expect(source).not.toContain("Get-Service");
     expect(source).not.toContain("Get-Command psql");
   });

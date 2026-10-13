@@ -50,13 +50,13 @@ function Set-FuneralControlPhase {
 function Expand-FuneralControlSafeArchive {
   param([Parameter(Mandatory)][string]$Archive, [Parameter(Mandatory)][string]$Destination)
   Add-Type -AssemblyName System.IO.Compression.FileSystem
-  $fullDestination = [IO.Path]::GetFullPath($Destination).TrimEnd('\\', '/')
+  $fullDestination = [IO.Path]::GetFullPath($Destination).TrimEnd('\', '/')
   $destinationPrefix = $fullDestination + [IO.Path]::DirectorySeparatorChar
   New-Item -ItemType Directory -Path $fullDestination -Force | Out-Null
   $zip = [IO.Compression.ZipFile]::OpenRead($Archive)
   try {
     foreach ($entry in $zip.Entries) {
-      $entryPath = $entry.FullName.Replace('/', [IO.Path]::DirectorySeparatorChar).Replace('\\', [IO.Path]::DirectorySeparatorChar)
+      $entryPath = $entry.FullName.Replace('/', [IO.Path]::DirectorySeparatorChar).Replace('\', [IO.Path]::DirectorySeparatorChar)
       if ([IO.Path]::IsPathRooted($entryPath)) { throw 'Arquivo ZIP contém caminho absoluto inválido.' }
       $target = [IO.Path]::GetFullPath((Join-Path $fullDestination $entryPath))
       if ($target -ne $fullDestination -and -not $target.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Arquivo ZIP contém caminho inválido.' }
