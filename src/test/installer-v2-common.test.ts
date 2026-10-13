@@ -15,6 +15,8 @@ describe("base do instalador v2", () => {
     expect(source).toContain("Expand-FuneralControlSafeArchive");
     expect(source).toContain("TrimEnd('\\', '/')");
     expect(source).toContain("Replace('\\', [IO.Path]::DirectorySeparatorChar)");
+    expect(source).toContain("ExtractToFile");
+    expect(source).not.toContain("ExtractToDirectory($zip, $fullDestination, $true)");
     expect(source).not.toContain("Get-Service");
     expect(source).not.toContain("Get-Command psql");
   });

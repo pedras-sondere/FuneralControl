@@ -61,7 +61,17 @@ function Expand-FuneralControlSafeArchive {
       $target = [IO.Path]::GetFullPath((Join-Path $fullDestination $entryPath))
       if ($target -ne $fullDestination -and -not $target.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Arquivo ZIP contém caminho inválido.' }
     }
-    [IO.Compression.ZipFileExtensions]::ExtractToDirectory($zip, $fullDestination, $true)
+    foreach ($entry in $zip.Entries) {
+      $entryPath = $entry.FullName.Replace('/', [IO.Path]::DirectorySeparatorChar).Replace('\', [IO.Path]::DirectorySeparatorChar)
+      $target = [IO.Path]::GetFullPath((Join-Path $fullDestination $entryPath))
+      if ([string]::IsNullOrEmpty($entry.Name)) {
+        New-Item -ItemType Directory -Path $target -Force | Out-Null
+      } else {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        if (Test-Path -LiteralPath $target) { throw 'Arquivo ZIP contém uma entrada duplicada.' }
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target)
+      }
+    }
   } finally { $zip.Dispose() }
 }
 
