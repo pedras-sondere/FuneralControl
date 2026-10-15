@@ -28,6 +28,7 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("installerVersion");
     expect(script).toContain("installerBuild");
     expect(script).toContain("$currentStage");
+    expect(script).toContain("managed-installation.json");
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
   });

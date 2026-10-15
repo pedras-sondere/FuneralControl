@@ -138,6 +138,14 @@ try {
     installerBuild = $installerBuild
     runId = $runId
   }
+  $ownershipMarker = Join-Path (Split-Path -Parent $paths.StatePath) 'managed-installation.json'
+  $ownershipPayload = [ordered]@{
+    product = 'FuneralControl'
+    installerVersion = $installerVersion
+    installerBuild = $installerBuild
+    createdAt = (Get-Date).ToUniversalTime().ToString('o')
+  } | ConvertTo-Json -Compress
+  [IO.File]::WriteAllText($ownershipMarker, $ownershipPayload, [Text.UTF8Encoding]::new($false))
 
   $currentStage = 'downloads'
   $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -StagingRoot $paths.StagingRoot

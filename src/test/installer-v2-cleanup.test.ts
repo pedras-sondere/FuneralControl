@@ -9,10 +9,17 @@ describe("remoção controlada do instalador v2", () => {
     const source = await readFile(path.join(root, "scripts", "Reset-FuneralControlV2.ps1"), "utf8");
 
     expect(source).toContain("C:\\Program Files\\FuneralControl");
-    expect(source).toContain("C:\\ProgramData\\FuneralControl\\v2");
+    expect(source).toContain("C:\\ProgramData\\FuneralControl");
+    expect(source).toContain("FuneralControl-Installer\\logs");
+    expect(source).toContain("desinstalacao-atual.log");
+    expect(source).toContain("[switch]$AllowLegacyCleanup");
+    expect(source).toContain("managed-installation.json");
     expect(source).toContain("takeown.exe");
     expect(source).toContain("icacls.exe");
     expect(source).toContain("Remove-Item -LiteralPath $Path -Recurse -Force");
+    expect(source).toContain("Test-FuneralControlPrivateProcess");
+    expect(source).toContain("ExecutablePath");
+    expect(source).toContain("Confirm-FuneralControlTargetAbsent");
     expect(source).toContain("FuneralControl.lnk");
   });
 
@@ -20,10 +27,21 @@ describe("remoção controlada do instalador v2", () => {
     const source = await readFile(path.join(root, "installer", "FuneralControlV2.iss"), "utf8");
 
     expect(source).toContain("TInputOptionWizardPage");
-    expect(source).toContain("Instalar ou desinstalar");
-    expect(source).toContain("Desinstalar");
+    expect(source).toContain("Instalação");
+    expect(source).toContain("Desinstalação completa");
     expect(source).toContain("Reset-FuneralControlV2.ps1");
+    expect(source).toContain('DestDir: "{tmp}"');
+    expect(source).toContain("Check: IsUninstallMode");
+    expect(source).toContain("Check: IsInstallMode");
+    expect(source).toContain("-AllowLegacyCleanup");
+    expect(source).toContain("desinstalacao-atual.log");
     expect(source).toContain("Uninstallable=no");
+
+    const programFilesSources = source
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("Source:") && line.includes('DestDir: "{app}'));
+    expect(programFilesSources.length).toBeGreaterThan(0);
+    expect(programFilesSources.every((line) => line.includes("Check: IsInstallMode"))).toBe(true);
   });
 
   it("inclui um modo de teste que não remove arquivos", async () => {
@@ -31,6 +49,6 @@ describe("remoção controlada do instalador v2", () => {
 
     expect(source).toContain("[switch]$DryRun");
     expect(source).toContain("if ($DryRun)");
-    expect(source).toContain("removes = @($InstallRoot, $DataRoot)");
+    expect(source).toContain("removes = @($InstallRoot, $DataRoot, $desktopShortcut)");
   });
 });

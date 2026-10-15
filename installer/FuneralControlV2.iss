@@ -1,5 +1,6 @@
 #define AppName "FuneralControl"
-#define AppVersion "2.0.0"
+#define AppVersion "2.1.0-rc.1"
+#define BuildId "20261015.1"
 #define AppPublisher "FuneralControl"
 
 [Setup]
@@ -8,105 +9,166 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
+DisableDirPage=yes
+UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\release
-OutputBaseFilename=FuneralControl-Instalador-v2
+OutputBaseFilename=FuneralControl-Instalador-2.1.0-rc.1-build-20261015.1
 Compression=lzma2
 SolidCompression=yes
+SetupLogging=yes
+WizardStyle=modern
 Uninstallable=no
 
 [Files]
-Source: "..\FuneralControlV2.cmd"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\scripts\FuneralControlInstaller.Common.psm1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
-Source: "..\scripts\Configure-FuneralControlDatabaseV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
-Source: "..\scripts\Start-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
-Source: "..\scripts\Install-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
-Source: "..\scripts\Reset-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
-Source: "FuneralControlV2.manifest.psd1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion
+Source: "..\FuneralControlV2.cmd"; DestDir: "{app}"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\FuneralControlInstaller.Common.psm1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\Configure-FuneralControlDatabaseV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\Start-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\Install-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "FuneralControlV2.manifest.psd1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\Reset-FuneralControlV2.ps1"; DestDir: "{tmp}"; DestName: "Reset-FuneralControlV2.ps1"; Flags: ignoreversion deleteafterinstall; Check: IsUninstallMode
 
 [Code]
 var
   OperationPage: TInputOptionWizardPage;
+  UninstallConfirmed: Boolean;
+
+function IsInstallMode: Boolean;
+begin
+  Result := OperationPage.SelectedValueIndex = 0;
+end;
+
+function IsUninstallMode: Boolean;
+begin
+  Result := OperationPage.SelectedValueIndex = 1;
+end;
 
 procedure InitializeWizard;
 begin
+  UninstallConfirmed := False;
   OperationPage := CreateInputOptionPage(
     wpWelcome,
-    'Instalar ou desinstalar',
+    'Instalação ou Desinstalação completa',
     'Escolha a operação desejada',
-    'Instalar prepara o FuneralControl neste computador. Desinstalar remove permanentemente a instalação local, o banco e os documentos armazenados nela.',
+    'A Instalação prepara todos os componentes locais. A Desinstalação completa apaga o programa, o banco local, os documentos, as configurações e o atalho.',
     True,
     False
   );
-  OperationPage.Add('Instalar o FuneralControl neste computador');
-  OperationPage.Add('Desinstalar permanentemente o FuneralControl deste computador');
+  OperationPage.Add('Instalação');
+  OperationPage.Add('Desinstalação completa');
   OperationPage.SelectedValueIndex := 0;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := IsUninstallMode and (PageID = wpSelectDir);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID <> OperationPage.ID then
+    Exit;
+
+  if IsInstallMode then begin
+    UninstallConfirmed := False;
+    WizardForm.Caption := 'Instalação do FuneralControl';
+    Exit;
+  end;
+
+  WizardForm.Caption := 'Desinstalação completa do FuneralControl';
+  if not UninstallConfirmed then begin
+    UninstallConfirmed := MsgBox(
+      'A Desinstalação completa apagará permanentemente o aplicativo, todo o banco de dados local, documentos enviados, configurações e o atalho do FuneralControl deste computador.' + #13#10 + #13#10 +
+      'Deseja continuar?',
+      mbConfirmation,
+      MB_YESNO
+    ) = IDYES;
+    Result := UninstallConfirmed;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
   InstallRoot: String;
+  PowerShellPath: String;
+  Arguments: String;
 begin
   if CurStep <> ssPostInstall then
     Exit;
 
   InstallRoot := ExpandConstant('{app}');
-  if OperationPage.SelectedValueIndex = 1 then begin
-    if MsgBox(
-      'A desinstalação apagará permanentemente o aplicativo, o banco de dados local, documentos enviados, configurações e logs do FuneralControl deste computador. Deseja continuar?',
-      mbConfirmation,
-      MB_YESNO
-    ) <> IDYES then begin
-      WizardForm.StatusLabel.Caption := 'Desinstalação cancelada.';
-      Abort;
-    end;
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
 
-    WizardForm.StatusLabel.Caption := 'Removendo a instalação local do FuneralControl.';
-    if not Exec(
-      ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      '-NoProfile -ExecutionPolicy Bypass -File "' + InstallRoot + '\bootstrap\Reset-FuneralControlV2.ps1"',
-      '',
-      SW_SHOW,
-      ewWaitUntilTerminated,
-      ResultCode
-    ) then begin
-      MsgBox('Não foi possível iniciar a remoção local.', mbError, MB_OK);
+  if IsUninstallMode then begin
+    WizardForm.StatusLabel.Caption := 'Executando a Desinstalação completa e verificando os alvos.';
+    Arguments :=
+      '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\Reset-FuneralControlV2.ps1') + '"' +
+      ' -InstallRoot "' + InstallRoot + '"' +
+      ' -DataRoot "C:\ProgramData\FuneralControl"' +
+      ' -DesktopPath "' + ExpandConstant('{userdesktop}') + '"' +
+      ' -LogPath "C:\ProgramData\FuneralControl-Installer\logs\desinstalacao-atual.log"' +
+      ' -InstallerVersion "{#AppVersion}" -AllowLegacyCleanup';
+
+    if not Exec(PowerShellPath, Arguments, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin
+      MsgBox(
+        'Não foi possível iniciar a Desinstalação completa.' + #13#10 +
+        'Consulte C:\ProgramData\FuneralControl-Installer\logs\desinstalacao-atual.log.',
+        mbError,
+        MB_OK
+      );
       Abort;
     end;
 
     if ResultCode <> 0 then begin
-      MsgBox('A remoção não foi concluída. Não tente apagar as pastas manualmente; envie a mensagem exibida pela janela.', mbError, MB_OK);
+      MsgBox(
+        'A Desinstalação completa não foi concluída. Nenhuma limpeza manual é necessária.' + #13#10 +
+        'Consulte C:\ProgramData\FuneralControl-Installer\logs\desinstalacao-atual.log para ver a etapa e o erro exatos.',
+        mbError,
+        MB_OK
+      );
       Abort;
     end;
 
-    MsgBox('A desinstalação foi concluída. Execute este mesmo instalador novamente e escolha Instalar para começar do zero.', mbInformation, MB_OK);
+    MsgBox(
+      'A Desinstalação completa foi concluída e os alvos foram verificados. Execute este instalador novamente e escolha Instalação para começar do zero.',
+      mbInformation,
+      MB_OK
+    );
     Exit;
   end;
 
-  WizardForm.StatusLabel.Caption := 'Preparando os componentes locais verificados do FuneralControl. Esta etapa pode levar alguns minutos.';
-  if not Exec(
-    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -ExecutionPolicy Bypass -File "' + InstallRoot + '\bootstrap\Install-FuneralControlV2.ps1" -InstallRoot "' + InstallRoot + '" -ManifestPath "' + InstallRoot + '\bootstrap\FuneralControlV2.manifest.psd1"',
-    '',
-    SW_SHOW,
-    ewWaitUntilTerminated,
-    ResultCode
-  ) then begin
-    MsgBox('Não foi possível iniciar a preparação local. Consulte o suporte.', mbError, MB_OK);
-    Abort;
-  end;
+  WizardForm.StatusLabel.Caption := 'Executando a Instalação dos componentes locais verificados. Esta etapa pode levar alguns minutos.';
+  Arguments :=
+    '-NoProfile -ExecutionPolicy Bypass -File "' + InstallRoot + '\bootstrap\Install-FuneralControlV2.ps1"' +
+    ' -InstallRoot "' + InstallRoot + '"' +
+    ' -ManifestPath "' + InstallRoot + '\bootstrap\FuneralControlV2.manifest.psd1"' +
+    ' -DiagnosticRoot "C:\ProgramData\FuneralControl-Installer\logs"';
 
-  if ResultCode <> 0 then begin
+  if not Exec(PowerShellPath, Arguments, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin
     MsgBox(
-      'A preparação do FuneralControl não foi concluída. Nenhum atalho foi criado.' + #13#10 +
-      'Consulte C:\ProgramData\FuneralControl\v2\logs\instalacao-v2.log e execute novamente o instalador.',
+      'Não foi possível iniciar a Instalação.' + #13#10 +
+      'Consulte C:\ProgramData\FuneralControl-Installer\logs\instalacao-atual.log.',
       mbError,
       MB_OK
     );
     Abort;
   end;
+
+  if ResultCode <> 0 then begin
+    MsgBox(
+      'A Instalação do FuneralControl não foi concluída. O atalho somente é criado após todas as verificações.' + #13#10 +
+      'Consulte C:\ProgramData\FuneralControl-Installer\logs\instalacao-atual.log para ver a etapa e o erro exatos.',
+      mbError,
+      MB_OK
+    );
+    Abort;
+  end;
+
+  MsgBox('A Instalação foi concluída e o atalho FuneralControl foi criado na Área de Trabalho.', mbInformation, MB_OK);
 end;

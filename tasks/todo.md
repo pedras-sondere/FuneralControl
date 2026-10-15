@@ -8,17 +8,17 @@
 
 ## Etapa 2 — Desinstalação completa e independente
 
-- [ ] Garantir por teste que desinstalar não copia para `Program Files`.
-- [ ] Executar o removedor a partir de `%TEMP%`.
-- [ ] Parar somente processos privados e apagar diretórios autorizados/atalho.
-- [ ] Persistir log externo e comprovar ausência dos alvos.
-- [ ] Compilar e fazer commit.
+- [x] Garantir por teste que desinstalar não copia para `Program Files`.
+- [x] Executar o removedor a partir de `%TEMP%`.
+- [x] Parar somente processos privados e apagar diretórios autorizados/atalho.
+- [x] Persistir log externo e comprovar ausência dos alvos.
+- [x] Compilar e fazer commit.
 
 ## Checkpoint 1
 
-- [ ] Estado repetido passa.
-- [ ] Desinstalação temporária passa.
-- [ ] Inno Setup compila.
+- [x] Estado repetido passa.
+- [x] Desinstalação temporária passa.
+- [x] Inno Setup compila.
 
 ## Etapa 3 — Base de programas e arquivos
 
