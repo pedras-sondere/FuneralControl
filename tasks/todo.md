@@ -42,10 +42,10 @@
 
 ## Etapa 5 — PostgreSQL e banco
 
-- [ ] Testar porta 54329, SCRAM, loopback, DPAPI e ACLs.
-- [ ] Confirmar que logs não contêm segredos.
+- [x] Testar porta 54329, SCRAM, loopback, DPAPI e ACLs.
+- [x] Confirmar que logs não contêm segredos.
 - [ ] Confirmar consulta SQL antes de avançar.
-- [ ] Fazer commit.
+- [x] Fazer commit.
 
 ## Etapa 6 — Aplicação, saúde e atalho
 

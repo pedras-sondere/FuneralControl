@@ -21,6 +21,14 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain("[string]$LogPath");
     expect(script).toContain("Aplicando permissões aos dados locais");
     expect(script).toContain("Write-Host $Message");
+    expect(script).toContain("[ValidateSet(54329)]");
+    expect(script).toContain("$InitialAdminEmail = 'admin'");
+    expect(script).toContain("operation = 'BancoDeDados'");
+    expect(script).toContain("$roleSql | & $psql @psqlArguments");
+    expect(script).toContain("'-U', 'funeralcontrol_app', '-d', 'funeralcontrol'");
+    expect(script).toContain("Conexão da aplicação com o banco funeralcontrol validada");
+    expect(script).toContain("Assert-FuneralControlDatabasePath");
+    expect(script).not.toContain("@psqlArguments '-c' $roleSql");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");
     expect(script).not.toContain("--superpassword");

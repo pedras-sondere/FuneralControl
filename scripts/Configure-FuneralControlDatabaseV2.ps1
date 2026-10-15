@@ -5,9 +5,9 @@ param(
   [Parameter(Mandatory)][string]$RuntimePostgresRoot,
   [Parameter(Mandatory)][string]$AuthorizedSid,
   [string]$LogPath,
-  [ValidatePattern('^[^\s@]+@[^\s@]+\.[^\s@]+$')][string]$InitialAdminEmail = 'admin@local.funeralcontrol',
+  [ValidateLength(1, 254)][string]$InitialAdminEmail = 'admin',
   [ValidateLength(5, 256)][string]$InitialAdminPassword = 'admin',
-  [int]$Port = 54329,
+  [ValidateSet(54329)][int]$Port = 54329,
   [switch]$DryRun,
   [switch]$AsJson
 )
@@ -19,7 +19,26 @@ Import-Module (Join-Path $PSScriptRoot 'FuneralControlInstaller.Common.psm1') -F
 function Write-FuneralControlDatabaseLog {
   param([Parameter(Mandatory)][string]$Message)
   Write-Host $Message
-  if ($LogPath) { Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format o) $Message" -Encoding UTF8 }
+  if ($LogPath) {
+    $entry = [ordered]@{
+      timestamp = (Get-Date).ToString('o')
+      operation = 'BancoDeDados'
+      stage = 'configuracao-postgresql'
+      level = 'INFO'
+      message = $Message
+    } | ConvertTo-Json -Compress
+    [IO.File]::AppendAllText($LogPath, "$entry`r`n", [Text.UTF8Encoding]::new($true))
+  }
+}
+
+function Assert-FuneralControlDatabasePath {
+  param([Parameter(Mandatory)][string]$Actual, [Parameter(Mandatory)][string]$Expected)
+  $actualPath = [IO.Path]::GetFullPath($Actual).TrimEnd([IO.Path]::DirectorySeparatorChar)
+  $expectedPath = [IO.Path]::GetFullPath($Expected).TrimEnd([IO.Path]::DirectorySeparatorChar)
+  if (-not [string]::Equals($actualPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'A configuração do banco só pode usar os diretórios privados oficiais do FuneralControl.'
+  }
+  $actualPath
 }
 
 function Assert-LastExitCode {
@@ -51,6 +70,9 @@ function Protect-FuneralControlData {
   }
 }
 
+$InstallRoot = Assert-FuneralControlDatabasePath -Actual $InstallRoot -Expected 'C:\Program Files\FuneralControl'
+$DataRoot = Assert-FuneralControlDatabasePath -Actual $DataRoot -Expected 'C:\ProgramData\FuneralControl\v2'
+$RuntimePostgresRoot = Assert-FuneralControlDatabasePath -Actual $RuntimePostgresRoot -Expected (Join-Path $InstallRoot 'runtime\postgresql')
 $paths = Get-FuneralControlPaths -InstallRoot $InstallRoot -DataRoot $DataRoot
 $initdb = Join-Path $RuntimePostgresRoot 'bin\initdb.exe'
 $pgCtl = Join-Path $RuntimePostgresRoot 'bin\pg_ctl.exe'
@@ -134,7 +156,7 @@ END
 `$$;
 ALTER ROLE funeralcontrol_app PASSWORD '$appPassword';
 "@
-  & $psql @psqlArguments '-c' $roleSql | Out-Null
+  $roleSql | & $psql @psqlArguments | Out-Null
   Assert-LastExitCode 'configurar o usuário do banco de dados'
 
   $databaseExists = & $psql @psqlArguments '-tAc' "SELECT 1 FROM pg_database WHERE datname = 'funeralcontrol'"
@@ -143,6 +165,12 @@ ALTER ROLE funeralcontrol_app PASSWORD '$appPassword';
     & $psql @psqlArguments '-c' 'CREATE DATABASE funeralcontrol OWNER funeralcontrol_app' | Out-Null
     Assert-LastExitCode 'criar o banco de dados local'
   }
+
+  $env:PGPASSWORD = $appPassword
+  $applicationArguments = @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$Port", '-U', 'funeralcontrol_app', '-d', 'funeralcontrol')
+  & $psql @applicationArguments '-c' 'SELECT 1' | Out-Null
+  Assert-LastExitCode 'validar a conexão da aplicação com o banco funeralcontrol'
+  Write-FuneralControlDatabaseLog -Message 'Conexão da aplicação com o banco funeralcontrol validada.'
 
   $databaseUrl = "postgresql://funeralcontrol_app:$appPassword@127.0.0.1:$Port/funeralcontrol"
   $protectedConfig = [ordered]@{
