@@ -74,20 +74,25 @@ try {
   Write-FuneralControlInstallLog -Path $logPath -Message 'Downloads conferidos por tamanho e SHA-256.'
 
   if (-not (Test-Path -LiteralPath (Join-Path $paths.NodeRoot 'node.exe'))) {
+    Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o Node.js privado.'
     $nodeStaging = Join-Path $paths.StagingRoot 'node'
     Remove-Item -LiteralPath $nodeStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $nodeArchive -Destination $nodeStaging
     Move-FuneralControlSingleRoot -StagingDirectory $nodeStaging -Destination $paths.NodeRoot -RequiredRelativePath 'node.exe'
+    Write-FuneralControlInstallLog -Path $logPath -Message 'Node.js privado extraído.'
   }
   if (-not (Test-Path -LiteralPath (Join-Path $paths.PostgresRoot 'bin\initdb.exe'))) {
+    Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o PostgreSQL privado.'
     $postgresStaging = Join-Path $paths.StagingRoot 'postgresql'
     Remove-Item -LiteralPath $postgresStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $postgresArchive -Destination $postgresStaging
     Move-FuneralControlSingleRoot -StagingDirectory $postgresStaging -Destination $paths.PostgresRoot -RequiredRelativePath 'bin\initdb.exe'
+    Write-FuneralControlInstallLog -Path $logPath -Message 'PostgreSQL privado extraído.'
   }
 
   $appRoot = Join-Path $paths.AppRoot $manifest.Runtime.Version
   if (-not (Test-Path -LiteralPath $appRoot)) {
+    Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o aplicativo local.'
     $appStaging = Join-Path $paths.StagingRoot 'application'
     Remove-Item -LiteralPath $appStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $runtimeArchive -Destination $appStaging
@@ -96,17 +101,21 @@ try {
     }
     New-Item -ItemType Directory -Path $paths.AppRoot -Force | Out-Null
     Move-Item -LiteralPath $appStaging -Destination $appRoot
+    Write-FuneralControlInstallLog -Path $logPath -Message 'Aplicativo local extraído.'
   }
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'extracted' -State @{ appVersion = $manifest.Runtime.Version }
 
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  & (Join-Path $PSScriptRoot 'Configure-FuneralControlDatabaseV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -RuntimePostgresRoot $paths.PostgresRoot -AuthorizedSid $sid
+  Write-FuneralControlInstallLog -Path $logPath -Message 'Iniciando a configuração do banco local.'
+  & (Join-Path $PSScriptRoot 'Configure-FuneralControlDatabaseV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -RuntimePostgresRoot $paths.PostgresRoot -AuthorizedSid $sid -LogPath $logPath
   if (-not $?) { throw 'Não foi possível preparar o banco de dados local.' }
 
+  Write-FuneralControlInstallLog -Path $logPath -Message 'Validando a inicialização do aplicativo local.'
   & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -NoBrowser
   if (-not $?) { throw 'Não foi possível validar o aplicativo local.' }
 
   $desktop = [Environment]::GetFolderPath('Desktop')
+  Write-FuneralControlInstallLog -Path $logPath -Message 'Criando o atalho do sistema.'
   $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'FuneralControl.lnk'))
   $shortcut.TargetPath = Join-Path $InstallRoot 'FuneralControlV2.cmd'
   $shortcut.WorkingDirectory = $InstallRoot

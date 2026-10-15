@@ -4,6 +4,7 @@ param(
   [Parameter(Mandatory)][string]$DataRoot,
   [Parameter(Mandatory)][string]$RuntimePostgresRoot,
   [Parameter(Mandatory)][string]$AuthorizedSid,
+  [string]$LogPath,
   [ValidatePattern('^[^\s@]+@[^\s@]+\.[^\s@]+$')][string]$InitialAdminEmail = 'admin@local.funeralcontrol',
   [ValidateLength(5, 256)][string]$InitialAdminPassword = 'admin',
   [int]$Port = 54329,
@@ -14,6 +15,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'FuneralControlInstaller.Common.psm1') -Force
+
+function Write-FuneralControlDatabaseLog {
+  param([Parameter(Mandatory)][string]$Message)
+  if ($LogPath) { Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format o) $Message" -Encoding UTF8 }
+}
 
 function Assert-LastExitCode {
   param([Parameter(Mandatory)][string]$Action)
@@ -62,10 +68,12 @@ if ((Test-Path $paths.PostgresData) -and -not (Test-Path $paths.StatePath)) {
   throw 'O diretório de dados não pertence a uma instalação v2 válida.'
 }
 
+Write-FuneralControlDatabaseLog -Message 'Aplicando permissões aos dados locais.'
 Protect-FuneralControlData -Directory $DataRoot -Sid $AuthorizedSid
 foreach ($directory in @($paths.ConfigRoot, $paths.UploadRoot, $paths.StagingRoot, $paths.LogRoot)) {
   Protect-FuneralControlData -Directory $directory -Sid $AuthorizedSid
 }
+Write-FuneralControlDatabaseLog -Message 'Permissões dos dados locais concluídas.'
 
 $configPath = Join-Path $paths.ConfigRoot 'runtime.dpapi'
 $existingConfig = Read-FuneralControlProtectedConfig -Path $configPath
@@ -75,11 +83,13 @@ $originalPgPassword = $env:PGPASSWORD
 
 try {
   if (-not $clusterExists) {
+    Write-FuneralControlDatabaseLog -Message 'Inicializando o PostgreSQL privado.'
     $bootstrapPassword = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
     New-Item -ItemType Directory -Path $paths.PostgresData -Force | Out-Null
     Set-Content -LiteralPath $secretFile -Value $bootstrapPassword -Encoding ASCII -NoNewline
     & $initdb '-D' $paths.PostgresData '--encoding=UTF8' '--auth=scram-sha-256' '--username=funeralcontrol_bootstrap' "--pwfile=$secretFile" | Out-Null
     Assert-LastExitCode 'inicializar o PostgreSQL privado'
+    Write-FuneralControlDatabaseLog -Message 'Inicialização do PostgreSQL privado concluída.'
   } else {
     if (-not $existingConfig -or -not $existingConfig.bootstrapPassword) {
       throw 'A configuração protegida do PostgreSQL privado não está disponível para esta conta do Windows.'
@@ -100,14 +110,17 @@ password_encryption = 'scram-sha-256'
 
   & $pgIsReady '-h' '127.0.0.1' '-p' "$Port" '-t' '1' | Out-Null
   if ($LASTEXITCODE -ne 0) {
+    Write-FuneralControlDatabaseLog -Message 'Iniciando o PostgreSQL privado.'
     & $pgCtl '-D' $paths.PostgresData '-w' '-t' '30' 'start' | Out-Null
     Assert-LastExitCode 'iniciar o PostgreSQL privado'
+    Write-FuneralControlDatabaseLog -Message 'PostgreSQL privado iniciado.'
   }
 
   $env:PGPASSWORD = $bootstrapPassword
   $psqlArguments = @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$Port", '-U', 'funeralcontrol_bootstrap', '-d', 'postgres')
   & $psql @psqlArguments '-c' 'SELECT 1' | Out-Null
   Assert-LastExitCode 'validar o PostgreSQL privado'
+  Write-FuneralControlDatabaseLog -Message 'Conexão com PostgreSQL privado validada.'
 
   $appPassword = if ($existingConfig -and $existingConfig.appPassword) { [string]$existingConfig.appPassword } else { [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N') }
   $roleSql = @"
@@ -146,6 +159,7 @@ ALTER ROLE funeralcontrol_app PASSWORD '$appPassword';
   Set-FuneralControlProtectedConfig -Path $configPath -Config $protectedConfig
   Protect-FuneralControlData -Directory $paths.ConfigRoot -Sid $AuthorizedSid
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'databaseConfigured' -State @{ port = $Port; authorizedSid = $AuthorizedSid }
+  Write-FuneralControlDatabaseLog -Message 'Banco de dados local configurado.'
 } finally {
   if ($null -eq $originalPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $originalPgPassword }
   Remove-Item -LiteralPath $secretFile -Force -ErrorAction SilentlyContinue

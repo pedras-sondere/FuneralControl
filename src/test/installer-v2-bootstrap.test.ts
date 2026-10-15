@@ -16,6 +16,9 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("Configure-FuneralControlDatabaseV2.ps1");
     expect(script).toContain("WScript.Shell");
     expect(script).toContain("Set-FuneralControlPhase");
+    expect(script).toContain("Extraindo o PostgreSQL privado");
+    expect(script).toContain("Iniciando a configuração do banco local");
+    expect(script).toContain("-LogPath $logPath");
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
   });
