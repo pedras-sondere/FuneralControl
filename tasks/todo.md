@@ -29,16 +29,16 @@
 
 ## Etapa 4 — GitHub Releases
 
-- [ ] Auditar pacote, allowlist e ausência de conteúdo pessoal.
+- [x] Auditar pacote, allowlist e ausência de conteúdo pessoal.
 - [ ] Confirmar origem do GitHub e ativo imutável.
-- [ ] Testar atualização manual na abertura.
-- [ ] Fazer commit.
+- [x] Testar atualização manual na abertura.
+- [x] Fazer commit.
 
 ## Checkpoint 2
 
 - [ ] Downloads e hashes passam.
-- [ ] Runtime corresponde ao manifesto.
-- [ ] Nenhum runtime/serviço global é usado.
+- [x] Runtime corresponde ao manifesto.
+- [x] Nenhum runtime/serviço global é usado.
 
 ## Etapa 5 — PostgreSQL e banco
 

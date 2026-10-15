@@ -26,7 +26,10 @@ try {
   }
   $manifest = @{ version = $Version; schemaVersion = 1; generatedAt = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json
   Set-Content -LiteralPath (Join-Path $staging 'runtime-manifest.json') -Value $manifest -Encoding UTF8
-  $forbidden = @('.env', '.git', 'src', 'docs', 'tests', 'docker-compose.yml', '.wrangler', '.superpowers')
+  $allowedTopLevel = @('package.json', 'package-lock.json', 'dist', 'node_modules', 'runtime-manifest.json')
+  $unexpected = @(Get-ChildItem -Force -LiteralPath $staging | Where-Object { $allowedTopLevel -notcontains $_.Name })
+  if ($unexpected.Count -gt 0) { throw "Conteúdo fora da allowlist do runtime: $($unexpected.Name -join ', ')" }
+  $forbidden = @('.env', '.git', 'src', 'docs', 'tests', 'docker-compose.yml', '.wrangler', '.superpowers', 'release-private-key.pem', 'postgres-bootstrap.secret')
   foreach ($name in $forbidden) { if (Test-Path (Join-Path $staging $name)) { throw "Conteúdo proibido no runtime: $name" } }
   Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
   # ZipFile evita o bloqueio observado no Compress-Archive do PowerShell 5.1

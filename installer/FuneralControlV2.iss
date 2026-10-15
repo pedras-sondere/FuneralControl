@@ -29,6 +29,7 @@ Source: "..\scripts\FuneralControlInstaller.Common.psm1"; DestDir: "{app}\bootst
 Source: "..\scripts\Configure-FuneralControlDatabaseV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
 Source: "..\scripts\Start-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
 Source: "..\scripts\Install-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
+Source: "..\scripts\Update-FuneralControlV2.ps1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
 Source: "FuneralControlV2.manifest.psd1"; DestDir: "{app}\bootstrap"; Flags: ignoreversion; Check: IsInstallMode
 Source: "..\scripts\Reset-FuneralControlV2.ps1"; DestDir: "{tmp}"; DestName: "Reset-FuneralControlV2.ps1"; Flags: ignoreversion deleteafterinstall; Check: IsUninstallMode
 

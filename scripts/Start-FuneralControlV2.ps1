@@ -67,6 +67,8 @@ $environment = [ordered]@{
   INITIAL_ADMIN_EMAIL = [string]$config.initialAdminEmail
   INITIAL_ADMIN_PASSWORD = [string]$config.initialAdminPassword
   FUNERALCONTROL_APP_VERSION = [string]$state.appVersion
+  FUNERALCONTROL_INSTALL_ROOT = $InstallRoot
+  FUNERALCONTROL_DATA_ROOT = $DataRoot
   FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION = if ($state.phase -eq 'databaseConfigured') { 'true' } else { 'false' }
 }
 $originalEnvironment = @{}

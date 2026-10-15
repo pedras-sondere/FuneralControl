@@ -203,24 +203,25 @@ export const checkForUpdate = createServerFn({ method: "GET" }).handler(async ()
 });
 
 const updateRequestSchema = z.object({
-  packageUrl: z
-    .string()
-    .url()
-    .refine(
-      (url) => url.startsWith("https://github.com/pedras-sondere/FuneralControl/"),
-      "Pacote de atualização inválido.",
-    ),
-  sha256: z.string().regex(/^[a-fA-F0-9]{64}$/, "Hash da atualização inválido."),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/, "Versão de atualização inválida."),
 });
 
 export const startUpdate = createServerFn({ method: "POST" })
   .validator((data: unknown) => updateRequestSchema.parse(data))
   .handler(async ({ data }) => {
     const user = await auth();
-    const { getInstalledApplicationRoot, buildUpdateCommand } =
+    const { APP_VERSION } = await import("./app-version");
+    const { getAvailableRelease } = await import("./github-releases.server");
+    const release = await getAvailableRelease(APP_VERSION);
+    if (!release || release.version !== data.version) {
+      return { ok: false as const, error: "A versão solicitada não está disponível no GitHub Releases." };
+    }
+
+    const { getInstalledApplicationRoot, getInstalledDataRoot, buildElevatedUpdateCommand } =
       await import("./update-trigger.server");
     const installRoot = getInstalledApplicationRoot(process.env);
-    if (!installRoot) {
+    const dataRoot = getInstalledDataRoot(process.env);
+    if (!installRoot || !dataRoot) {
       return {
         ok: false as const,
         error:
@@ -230,7 +231,7 @@ export const startUpdate = createServerFn({ method: "POST" })
 
     const path = await import("node:path");
     const { access } = await import("node:fs/promises");
-    const scriptPath = path.join(installRoot, "scripts", "Update-FuneralControl.ps1");
+    const scriptPath = path.join(installRoot, "bootstrap", "Update-FuneralControlV2.ps1");
     try {
       await access(scriptPath);
     } catch {
@@ -255,7 +256,14 @@ export const startUpdate = createServerFn({ method: "POST" })
     const { spawn } = await import("node:child_process");
     const updateProcess = spawn(
       "powershell.exe",
-      buildUpdateCommand({ installRoot, packageUrl: data.packageUrl, sha256: data.sha256 }),
+      buildElevatedUpdateCommand({
+        installRoot,
+        dataRoot,
+        version: release.version,
+        size: release.size,
+        packageUrl: release.packageUrl,
+        sha256: release.sha256,
+      }),
       { detached: true, stdio: "ignore", windowsHide: true },
     );
     updateProcess.unref();

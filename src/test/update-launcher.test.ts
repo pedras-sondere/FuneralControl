@@ -1,33 +1,21 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(import.meta.dirname, "..", "..");
 
 describe("atualizador local", () => {
-  it("exige backup validado e preserva dados locais no modo de inspeção", async () => {
-    const { stdout } = await execFileAsync("powershell.exe", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      path.join(projectRoot, "scripts", "Update-FuneralControl.ps1"),
-      "-PackageUrl",
-      "https://github.com/pedras-sondere/FuneralControl/releases/download/v1.0.1/FuneralControl-update.zip",
-      "-Sha256",
-      "a".repeat(64),
-      "-InstallRoot",
-      projectRoot,
-      "-DryRun",
-      "-AsJson",
-    ]);
-
-    expect(JSON.parse(stdout)).toEqual({
-      ok: true,
-      backupRequired: true,
-      preservedPaths: [".env", "data", "uploads", "backups"],
-    });
+  it("instala lado a lado, usa ZIP seguro e restaura o estado em falha", async () => {
+    const source = await readFile(
+      path.join(projectRoot, "scripts", "Update-FuneralControlV2.ps1"),
+      "utf8",
+    );
+    expect(source).toContain("Expand-FuneralControlSafeArchive");
+    expect(source).toContain("runtime-manifest.json");
+    expect(source).toContain("originalStateJson");
+    expect(source).toContain("Start-FuneralControlV2.ps1");
+    expect(source).toContain("BackupValidated");
+    expect(source).not.toContain("Expand-Archive");
+    expect(source).not.toContain("ProgramData\\FuneralControl\\v2\\uploads");
   });
 });

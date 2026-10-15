@@ -14,6 +14,7 @@ describe("aviso de atualização", () => {
           packageUrl:
             "https://github.com/pedras-sondere/FuneralControl/releases/download/v1.2.0/update.zip",
           sha256: "a".repeat(64),
+          size: 1234,
         }}
         onUpdate={onUpdate}
       />,

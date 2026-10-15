@@ -23,6 +23,13 @@ interface AppLayoutProps {
   user?: { id: number; name: string; email: string } | null;
 }
 
+let startupUpdateRequest: Promise<AvailableRelease | null> | null = null;
+
+function checkForUpdateAtStartup() {
+  startupUpdateRequest ??= checkForUpdate();
+  return startupUpdateRequest;
+}
+
 export function AppLayout({ children, activeTab = "dashboard", user }: AppLayoutProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -30,7 +37,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
   const [release, setRelease] = useState<AvailableRelease | null>(null);
 
   useEffect(() => {
-    void checkForUpdate()
+    void checkForUpdateAtStartup()
       .then(setRelease)
       .catch(() => undefined);
   }, []);
@@ -57,7 +64,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
     setUpdating(true);
     try {
       const result = await startUpdate({
-        data: { packageUrl: release.packageUrl, sha256: release.sha256 },
+        data: { version: release.version },
       });
       if (!result.ok) {
         toast.error(result.error);

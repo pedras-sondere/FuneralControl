@@ -15,6 +15,9 @@ describe("empacotador de runtime", () => {
     expect(script).toContain("dist");
     expect(script).toContain(".env");
     expect(script).toContain("docker-compose.yml");
-    expect(script).toContain("Compress-Archive");
+    expect(script).toContain("$allowedTopLevel");
+    expect(script).toContain("release-private-key.pem");
+    expect(script).toContain("postgres-bootstrap.secret");
+    expect(script).toContain("[IO.Compression.ZipFile]::CreateFromDirectory");
   });
 });
