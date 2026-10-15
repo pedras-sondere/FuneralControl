@@ -19,9 +19,15 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("Extraindo o PostgreSQL privado");
     expect(script).toContain("Iniciando a configuração do banco local");
     expect(script).toContain("-LogPath $logPath");
-    expect(script).toContain("Write-Host $Message");
+    expect(script).toContain("Write-Host $safeMessage");
     expect(script).toContain("Repair-FuneralControlStateAccess");
     expect(script).toContain('"*${Sid}:(OI)(CI)M"');
+    expect(script).toContain("FuneralControl-Installer\\logs");
+    expect(script).toContain("instalacao-atual.log");
+    expect(script).toContain("$runId = [guid]::NewGuid().ToString('N')");
+    expect(script).toContain("installerVersion");
+    expect(script).toContain("installerBuild");
+    expect(script).toContain("$currentStage");
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
   });

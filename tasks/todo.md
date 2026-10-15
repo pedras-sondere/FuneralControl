@@ -2,9 +2,9 @@
 
 ## Etapa 1 — Estado, versão e diagnóstico
 
-- [ ] Criar testes de regressão do estado e identificação do build.
-- [ ] Simplificar a gravação e estruturar logs por execução/etapa.
-- [ ] Verificar em diretório temporário e fazer commit.
+- [x] Criar testes de regressão do estado e identificação do build.
+- [x] Simplificar a gravação e estruturar logs por execução/etapa.
+- [x] Verificar em diretório temporário e fazer commit.
 
 ## Etapa 2 — Desinstalação completa e independente
 

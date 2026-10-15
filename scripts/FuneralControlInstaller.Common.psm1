@@ -42,21 +42,9 @@ function Set-FuneralControlPhase {
     }
   }
   foreach ($key in $State.Keys) { $payload[$key] = $State[$key] }
-  $temporary = "$StatePath.$([guid]::NewGuid()).tmp"
-  $backup = "$temporary.backup"
-  try {
-    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding UTF8
-    if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
-      # Move-Item -Force não substitui arquivos existentes de forma confiável
-      # no Windows PowerShell. File.Replace mantém a troca atômica do estado.
-      [IO.File]::Replace($temporary, $StatePath, $backup)
-    } else {
-      [IO.File]::Move($temporary, $StatePath)
-    }
-  } finally {
-    Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
-  }
+  $json = $payload | ConvertTo-Json -Depth 8
+  $encoding = [Text.UTF8Encoding]::new($false)
+  [IO.File]::WriteAllText($StatePath, $json, $encoding)
 }
 
 function Expand-FuneralControlSafeArchive {

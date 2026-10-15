@@ -1,5 +1,9 @@
 @{
   SchemaVersion = 2
+  Installer = @{
+    Version = '2.1.0-rc.1'
+    BuildId = '20261015.1'
+  }
   Runtime = @{
     Version = '2.0.0'
     Asset = 'FuneralControl-runtime-2.0.0.zip'
