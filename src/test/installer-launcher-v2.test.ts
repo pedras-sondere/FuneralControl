@@ -6,10 +6,7 @@ const root = path.resolve(import.meta.dirname, "../..");
 
 describe("inicializador local v2", () => {
   it("usa somente runtimes privados e injeta as configurações protegidas", async () => {
-    const script = await readFile(
-      path.join(root, "scripts", "Start-FuneralControlV2.ps1"),
-      "utf8",
-    );
+    const script = await readFile(path.join(root, "scripts", "Start-FuneralControlV2.ps1"), "utf8");
     expect(script).toContain("runtime.dpapi");
     expect(script).toContain("ConvertTo-SecureString");
     expect(script).toContain("DATABASE_URL");

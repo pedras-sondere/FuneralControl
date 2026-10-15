@@ -20,4 +20,17 @@ describe("base do instalador v2", () => {
     expect(source).not.toContain("Get-Service");
     expect(source).not.toContain("Get-Command psql");
   });
+
+  it("substitui de forma atômica o arquivo de estado quando ele já existe", async () => {
+    const source = await readFile(
+      path.join(root, "scripts", "FuneralControlInstaller.Common.psm1"),
+      "utf8",
+    );
+
+    expect(source).toContain("[IO.File]::Replace($temporary, $StatePath, $backup)");
+    expect(source).toContain("[IO.File]::Move($temporary, $StatePath)");
+    expect(source).not.toContain(
+      "Move-Item -LiteralPath $temporary -Destination $StatePath -Force",
+    );
+  }, 15_000);
 });
