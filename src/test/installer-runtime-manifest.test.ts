@@ -14,5 +14,8 @@ describe("manifesto do bootstrap v2", () => {
     expect(script).toContain("Sha256");
     expect(script).toContain("Size");
     expect(script).toContain("https://");
+    expect(script).toContain("InstallerVersion");
+    expect(script).toContain("BuildId");
+    expect(script).toContain("Installer = @{");
   });
 });

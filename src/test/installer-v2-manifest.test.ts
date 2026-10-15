@@ -17,5 +17,8 @@ describe("manifesto do instalador v2", () => {
     expect(manifest).toContain("Installer = @{");
     expect(manifest).toMatch(/Version = '2\.1\.0-rc\.1'/);
     expect(manifest).toMatch(/BuildId = '20261015\.1'/);
+    expect(manifest).toContain("https://github.com/pedras-sondere/FuneralControl/");
+    expect(manifest).toContain("https://nodejs.org/");
+    expect(manifest).toContain("https://get.enterprisedb.com/");
   });
 });

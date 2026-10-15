@@ -22,10 +22,10 @@
 
 ## Etapa 3 — Base de programas e arquivos
 
-- [ ] Validar espaço, internet, arquitetura e elevação.
-- [ ] Testar manifesto, tamanhos, hashes e ZIP seguro.
-- [ ] Validar Node.js, PostgreSQL e aplicação privados.
-- [ ] Fazer commit.
+- [x] Validar espaço, internet, arquitetura e elevação.
+- [x] Testar manifesto, tamanhos, hashes e ZIP seguro.
+- [x] Validar Node.js, PostgreSQL e aplicação privados.
+- [x] Fazer commit.
 
 ## Etapa 4 — GitHub Releases
 

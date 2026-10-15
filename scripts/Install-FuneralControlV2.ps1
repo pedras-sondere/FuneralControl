@@ -72,15 +72,22 @@ function Repair-FuneralControlStateAccess {
 }
 
 function Assert-FuneralControlAsset {
-  param([Parameter(Mandatory)]$Asset)
-  if ($Asset.Url -notmatch '^https://') { throw 'O manifesto contém um endereço de download inseguro.' }
+  param([Parameter(Mandatory)]$Asset, [Parameter(Mandatory)][string]$AllowedHost)
+  $uri = [uri]$Asset.Url
+  if ($uri.Scheme -ne 'https' -or -not [string]::Equals($uri.Host, $AllowedHost, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "O manifesto contém uma origem de download não autorizada: $($uri.Host)."
+  }
   if ($Asset.Sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'O manifesto contém um SHA-256 inválido.' }
   if ([long]$Asset.Size -lt 1) { throw 'O manifesto contém um tamanho inválido.' }
 }
 
 function Get-FuneralControlAsset {
-  param([Parameter(Mandatory)]$Asset, [Parameter(Mandatory)][string]$StagingRoot)
-  Assert-FuneralControlAsset -Asset $Asset
+  param(
+    [Parameter(Mandatory)]$Asset,
+    [Parameter(Mandatory)][string]$AllowedHost,
+    [Parameter(Mandatory)][string]$StagingRoot
+  )
+  Assert-FuneralControlAsset -Asset $Asset -AllowedHost $AllowedHost
   $name = [IO.Path]::GetFileName(([uri]$Asset.Url).AbsolutePath)
   if ([string]::IsNullOrWhiteSpace($name)) { throw 'O nome do arquivo de download é inválido.' }
   $destination = Join-Path $StagingRoot $name
@@ -92,6 +99,37 @@ function Get-FuneralControlAsset {
   if ($hash -ne $Asset.Sha256) { throw "O SHA-256 do arquivo $name não confere." }
   Move-Item -LiteralPath $partial -Destination $destination -Force
   return $destination
+}
+
+function Assert-FuneralControlPrerequisites {
+  param([Parameter(Mandatory)][string]$TargetRoot, [Parameter(Mandatory)]$Manifest)
+
+  $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+  if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'A Instalação precisa ser executada com permissões de administrador.'
+  }
+  if (-not [Environment]::Is64BitOperatingSystem) {
+    throw 'O FuneralControl requer Windows de 64 bits.'
+  }
+
+  $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($TargetRoot))
+  $drive = Get-PSDrive -Name $driveRoot.Substring(0, 1) -PSProvider FileSystem
+  if ([long]$drive.Free -lt 4GB) {
+    throw 'São necessários pelo menos 4 GB livres no disco de instalação.'
+  }
+
+  foreach ($hostName in @('github.com', 'nodejs.org', 'get.enterprisedb.com')) {
+    try {
+      if ([Net.Dns]::GetHostAddresses($hostName).Count -lt 1) { throw 'Nenhum endereço foi retornado.' }
+    } catch {
+      throw "Não foi possível acessar a origem necessária $hostName. Verifique a conexão com a internet."
+    }
+  }
+
+  Assert-FuneralControlAsset -Asset $Manifest.Runtime -AllowedHost 'github.com'
+  Assert-FuneralControlAsset -Asset $Manifest.Node -AllowedHost 'nodejs.org'
+  Assert-FuneralControlAsset -Asset $Manifest.PostgreSQL -AllowedHost 'get.enterprisedb.com'
 }
 
 function Move-FuneralControlSingleRoot {
@@ -122,8 +160,14 @@ try {
   }
   $installerVersion = [string]$manifest.Installer.Version
   $installerBuild = [string]$manifest.Installer.BuildId
-  foreach ($asset in @($manifest.Runtime, $manifest.Node, $manifest.PostgreSQL)) { Assert-FuneralControlAsset -Asset $asset }
+  Assert-FuneralControlPrerequisites -TargetRoot $InstallRoot -Manifest $manifest
   if ($manifest.Runtime.Asset -ne "FuneralControl-runtime-$($manifest.Runtime.Version).zip") { throw 'O pacote do aplicativo não corresponde à versão informada.' }
+  if ([IO.Path]::GetFileName(([uri]$manifest.Node.Url).AbsolutePath) -ne "node-v$($manifest.Node.Version)-win-x64.zip") {
+    throw 'O pacote do Node.js não corresponde à versão ou arquitetura informada.'
+  }
+  if ([IO.Path]::GetFileName(([uri]$manifest.PostgreSQL.Url).AbsolutePath) -ne "postgresql-$($manifest.PostgreSQL.Version)-windows-x64-binaries.zip") {
+    throw 'O pacote do PostgreSQL não corresponde à versão ou arquitetura informada.'
+  }
 
   New-Item -ItemType Directory -Path $paths.StagingRoot, $paths.LogRoot -Force | Out-Null
   $currentStage = 'pre-verificacao'
@@ -148,9 +192,9 @@ try {
   [IO.File]::WriteAllText($ownershipMarker, $ownershipPayload, [Text.UTF8Encoding]::new($false))
 
   $currentStage = 'downloads'
-  $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -StagingRoot $paths.StagingRoot
-  $postgresArchive = Get-FuneralControlAsset -Asset $manifest.PostgreSQL -StagingRoot $paths.StagingRoot
-  $runtimeArchive = Get-FuneralControlAsset -Asset $manifest.Runtime -StagingRoot $paths.StagingRoot
+  $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -AllowedHost 'nodejs.org' -StagingRoot $paths.StagingRoot
+  $postgresArchive = Get-FuneralControlAsset -Asset $manifest.PostgreSQL -AllowedHost 'get.enterprisedb.com' -StagingRoot $paths.StagingRoot
+  $runtimeArchive = Get-FuneralControlAsset -Asset $manifest.Runtime -AllowedHost 'github.com' -StagingRoot $paths.StagingRoot
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'verified' -State @{
     appVersion = $manifest.Runtime.Version
     installerVersion = $installerVersion
@@ -177,6 +221,18 @@ try {
     Move-FuneralControlSingleRoot -StagingDirectory $postgresStaging -Destination $paths.PostgresRoot -RequiredRelativePath 'bin\initdb.exe'
     Write-FuneralControlInstallLog -Path $logPath -Message 'PostgreSQL privado extraído.'
   }
+
+  $currentStage = 'validacao-runtimes'
+  $nodeVersion = (& (Join-Path $paths.NodeRoot 'node.exe') '--version').Trim()
+  if ($LASTEXITCODE -ne 0 -or $nodeVersion -ne "v$($manifest.Node.Version)") {
+    throw "A versão do Node.js privado não confere. Esperado: $($manifest.Node.Version); obtido: $nodeVersion."
+  }
+  $postgresVersion = (& (Join-Path $paths.PostgresRoot 'bin\postgres.exe') '--version').Trim()
+  $expectedPostgresVersion = ([string]$manifest.PostgreSQL.Version -split '-')[0]
+  if ($LASTEXITCODE -ne 0 -or $postgresVersion -notmatch [regex]::Escape($expectedPostgresVersion)) {
+    throw "A versão do PostgreSQL privado não confere. Esperado: $expectedPostgresVersion; obtido: $postgresVersion."
+  }
+  Write-FuneralControlInstallLog -Path $logPath -Message 'Node.js e PostgreSQL privados validados por versão.'
 
   $appRoot = Join-Path $paths.AppRoot $manifest.Runtime.Version
   if (-not (Test-Path -LiteralPath $appRoot)) {

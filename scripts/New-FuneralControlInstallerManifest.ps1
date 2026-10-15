@@ -2,6 +2,8 @@
 param(
   [Parameter(Mandatory)][string]$RuntimeMetadata,
   [Parameter(Mandatory)][ValidatePattern('^https://')][string]$RuntimeBaseUrl,
+  [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+(-[a-z0-9.]+)?$')][string]$InstallerVersion,
+  [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9._-]+$')][string]$BuildId,
   [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$NodeVersion,
   [Parameter(Mandatory)][ValidatePattern('^https://')][string]$NodeUrl,
   [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$NodeSha256,
@@ -38,6 +40,10 @@ function ConvertTo-Psd1Literal {
 $manifest = @"
 @{
   SchemaVersion = 2
+  Installer = @{
+    Version = $(ConvertTo-Psd1Literal $InstallerVersion)
+    BuildId = $(ConvertTo-Psd1Literal $BuildId)
+  }
   Runtime = @{
     Version = $(ConvertTo-Psd1Literal $runtime.version)
     Asset = $(ConvertTo-Psd1Literal $runtimeAsset)
