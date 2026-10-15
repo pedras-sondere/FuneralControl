@@ -19,6 +19,7 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("Extraindo o PostgreSQL privado");
     expect(script).toContain("Iniciando a configuração do banco local");
     expect(script).toContain("-LogPath $logPath");
+    expect(script).toContain("Write-Host $Message");
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
   });

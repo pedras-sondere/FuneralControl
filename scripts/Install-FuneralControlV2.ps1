@@ -14,6 +14,7 @@ Import-Module (Join-Path $PSScriptRoot 'FuneralControlInstaller.Common.psm1') -F
 function Write-FuneralControlInstallLog {
   param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Message)
   New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+  Write-Host $Message
   Add-Content -LiteralPath $Path -Value "$(Get-Date -Format o) $Message" -Encoding UTF8
 }
 

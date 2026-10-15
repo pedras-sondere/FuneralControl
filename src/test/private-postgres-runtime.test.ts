@@ -20,6 +20,7 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain('"*${Sid}:(OI)(CI)F"');
     expect(script).toContain("[string]$LogPath");
     expect(script).toContain("Aplicando permissões aos dados locais");
+    expect(script).toContain("Write-Host $Message");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");
     expect(script).not.toContain("--superpassword");
