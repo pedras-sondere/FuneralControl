@@ -214,7 +214,10 @@ export const startUpdate = createServerFn({ method: "POST" })
     const { getAvailableRelease } = await import("./github-releases.server");
     const release = await getAvailableRelease(APP_VERSION);
     if (!release || release.version !== data.version) {
-      return { ok: false as const, error: "A versão solicitada não está disponível no GitHub Releases." };
+      return {
+        ok: false as const,
+        error: "A versão solicitada não está disponível no GitHub Releases.",
+      };
     }
 
     const { getInstalledApplicationRoot, getInstalledDataRoot, buildElevatedUpdateCommand } =

@@ -37,8 +37,7 @@ export function parseAvailableRelease(release: GitHubRelease): AvailableRelease 
     return null;
 
   const expectedAssetName = `FuneralControl-runtime-${version}.zip`;
-  const expectedAssetUrl =
-    `https://github.com/pedras-sondere/FuneralControl/releases/download/v${version}/${expectedAssetName}`;
+  const expectedAssetUrl = `https://github.com/pedras-sondere/FuneralControl/releases/download/v${version}/${expectedAssetName}`;
   const packageAsset = release.assets.find(
     (asset): asset is { name: string; browser_download_url: string; size: number } =>
       typeof asset === "object" &&
