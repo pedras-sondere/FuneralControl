@@ -18,6 +18,31 @@ function Write-FuneralControlInstallLog {
   Add-Content -LiteralPath $Path -Value "$(Get-Date -Format o) $Message" -Encoding UTF8
 }
 
+function Repair-FuneralControlStateAccess {
+  param(
+    [Parameter(Mandatory)][string]$StatePath,
+    [Parameter(Mandatory)][string]$Sid
+  )
+
+  $stateDirectory = Split-Path -Parent $StatePath
+  New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+
+  # Uma instalação interrompida pode ter deixado a pasta de estado vinculada a
+  # outra credencial administrativa. Recuperamos somente esse controle técnico;
+  # banco, configurações protegidas e documentos do cliente não são alterados.
+  $directoryOutput = & icacls.exe $stateDirectory '/grant' "*${Sid}:(OI)(CI)M" '/C' 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível recuperar o acesso ao estado da instalação. $($directoryOutput -join ' ')"
+  }
+
+  if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
+    $fileOutput = & icacls.exe $StatePath '/grant' "*${Sid}:M" '/C' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "Não foi possível recuperar o arquivo de estado da instalação. $($fileOutput -join ' ')"
+    }
+  }
+}
+
 function Assert-FuneralControlAsset {
   param([Parameter(Mandatory)]$Asset)
   if ($Asset.Url -notmatch '^https://') { throw 'O manifesto contém um endereço de download inseguro.' }
@@ -66,6 +91,9 @@ try {
 
   New-Item -ItemType Directory -Path $paths.StagingRoot, $paths.LogRoot -Force | Out-Null
   Write-FuneralControlInstallLog -Path $logPath -Message 'Pré-verificação do instalador v2 concluída.'
+  $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  Write-FuneralControlInstallLog -Path $logPath -Message 'Verificando o acesso ao estado da instalação.'
+  Repair-FuneralControlStateAccess -StatePath $paths.StatePath -Sid $sid
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'prechecked' -State @{ appVersion = $manifest.Runtime.Version }
 
   $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -StagingRoot $paths.StagingRoot
@@ -106,7 +134,6 @@ try {
   }
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'extracted' -State @{ appVersion = $manifest.Runtime.Version }
 
-  $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   Write-FuneralControlInstallLog -Path $logPath -Message 'Iniciando a configuração do banco local.'
   & (Join-Path $PSScriptRoot 'Configure-FuneralControlDatabaseV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -RuntimePostgresRoot $paths.PostgresRoot -AuthorizedSid $sid -LogPath $logPath
   if (-not $?) { throw 'Não foi possível preparar o banco de dados local.' }

@@ -20,6 +20,8 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("Iniciando a configuração do banco local");
     expect(script).toContain("-LogPath $logPath");
     expect(script).toContain("Write-Host $Message");
+    expect(script).toContain("Repair-FuneralControlStateAccess");
+    expect(script).toContain('"*${Sid}:(OI)(CI)M"');
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
   });
