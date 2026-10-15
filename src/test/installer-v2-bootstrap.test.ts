@@ -40,6 +40,9 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("get.enterprisedb.com");
     expect(script).toContain("node.exe') '--version'");
     expect(script).toContain("postgres.exe') '--version'");
+    expect(script).toContain("[string]$DesktopPath");
+    expect(script).toContain("$verifiedShortcut.TargetPath");
+    expect(script).toContain("O atalho criado não aponta para o lançador esperado");
     expect(script).not.toContain("npm ci");
     expect(script).not.toContain("winget");
     expect(script).not.toContain("docker");

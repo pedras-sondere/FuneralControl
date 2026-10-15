@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $health = Get-FuneralControlHealth -Url $result.url
-if ($health -and $health.ok -and $health.version -eq $state.appVersion) {
+if ($health -and $health.ok -and $health.version -eq $state.appVersion -and $health.schemaVersion -ge 1) {
   if (-not $NoBrowser) { Start-Process $result.url }
   if ($AsJson) { $result | ConvertTo-Json -Compress }
   return
@@ -80,7 +80,7 @@ try {
   $output = Join-Path $paths.LogRoot 'application.out.log'
   $errorOutput = Join-Path $paths.LogRoot 'application.err.log'
   $nodeArguments = @('node_modules/srvx/bin/srvx.mjs', 'serve', '--prod', '--host=127.0.0.1', '--port=3000', '--dir=.', '--static=dist/client', '--entry=dist/server/server.js')
-  Start-Process -FilePath $node -ArgumentList $nodeArguments -WorkingDirectory $appRoot -WindowStyle Hidden -RedirectStandardOutput $output -RedirectStandardError $errorOutput | Out-Null
+  $applicationProcess = Start-Process -FilePath $node -ArgumentList $nodeArguments -WorkingDirectory $appRoot -WindowStyle Hidden -RedirectStandardOutput $output -RedirectStandardError $errorOutput -PassThru
 } finally {
   foreach ($name in $environment.Keys) { [Environment]::SetEnvironmentVariable($name, $originalEnvironment[$name], 'Process') }
 }
@@ -88,8 +88,12 @@ try {
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
   Start-Sleep -Seconds 1
   $health = Get-FuneralControlHealth -Url $result.url
-  if ($health -and $health.ok -and $health.version -eq $state.appVersion) {
-    Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'appValidated' -State @{ appVersion = $state.appVersion }
+  if ($health -and $health.ok -and $health.version -eq $state.appVersion -and $health.schemaVersion -ge 1) {
+    Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'appValidated' -State @{
+      appVersion = $state.appVersion
+      appPid = $applicationProcess.Id
+      schemaVersion = [int]$health.schemaVersion
+    }
     if (-not $NoBrowser) { Start-Process $result.url }
     if ($AsJson) { $result | ConvertTo-Json -Compress }
     return

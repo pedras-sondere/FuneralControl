@@ -13,6 +13,7 @@ describe("atualizador local", () => {
     expect(source).toContain("Expand-FuneralControlSafeArchive");
     expect(source).toContain("runtime-manifest.json");
     expect(source).toContain("originalStateJson");
+    expect(source).toContain("originalState.appPid");
     expect(source).toContain("Start-FuneralControlV2.ps1");
     expect(source).toContain("BackupValidated");
     expect(source).not.toContain("Expand-Archive");

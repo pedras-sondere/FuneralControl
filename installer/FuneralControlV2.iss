@@ -149,6 +149,7 @@ begin
     '-NoProfile -ExecutionPolicy Bypass -File "' + InstallRoot + '\bootstrap\Install-FuneralControlV2.ps1"' +
     ' -InstallRoot "' + InstallRoot + '"' +
     ' -ManifestPath "' + InstallRoot + '\bootstrap\FuneralControlV2.manifest.psd1"' +
+    ' -DesktopPath "' + ExpandConstant('{userdesktop}') + '"' +
     ' -DiagnosticRoot "C:\ProgramData\FuneralControl-Installer\logs"';
 
   if not Exec(PowerShellPath, Arguments, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin

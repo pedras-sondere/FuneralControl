@@ -71,12 +71,11 @@ try {
   Write-FuneralControlUpdateLog -Stage 'encerramento' -Message 'Aguardando o encerramento da versão em uso.'
   Start-Sleep -Seconds 3
   $nodePath = [IO.Path]::GetFullPath((Join-Path $paths.NodeRoot 'node.exe'))
-  $oldAppRoot = [IO.Path]::GetFullPath((Join-Path $paths.AppRoot ([string]$originalState.appVersion)))
+  $originalPid = if ($originalState.PSObject.Properties.Name -contains 'appPid') { [int]$originalState.appPid } else { 0 }
   for ($attempt = 0; $attempt -lt 30; $attempt++) {
-    $privateProcesses = @(Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object {
+    $privateProcesses = @(Get-CimInstance Win32_Process -Filter "ProcessId = $originalPid" -ErrorAction SilentlyContinue | Where-Object {
       $_.ExecutablePath -and
-      [string]::Equals([IO.Path]::GetFullPath([string]$_.ExecutablePath), $nodePath, [StringComparison]::OrdinalIgnoreCase) -and
-      $_.CommandLine -and $_.CommandLine.IndexOf($oldAppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+      [string]::Equals([IO.Path]::GetFullPath([string]$_.ExecutablePath), $nodePath, [StringComparison]::OrdinalIgnoreCase)
     })
     if ($privateProcesses.Count -eq 0) { break }
     Start-Sleep -Seconds 1

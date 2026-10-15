@@ -49,10 +49,10 @@
 
 ## Etapa 6 — Aplicação, saúde e atalho
 
-- [ ] Testar ordem PostgreSQL → aplicação → saúde.
-- [ ] Validar `/api/health` com versão e banco.
+- [x] Testar ordem PostgreSQL → aplicação → saúde.
+- [x] Validar `/api/health` com versão e banco.
 - [ ] Criar e conferir atalho no Desktop informado.
-- [ ] Fazer commit.
+- [x] Fazer commit.
 
 ## Checkpoint 3
 

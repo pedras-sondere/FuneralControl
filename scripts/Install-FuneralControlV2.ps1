@@ -3,6 +3,7 @@ param(
   [string]$InstallRoot = 'C:\Program Files\FuneralControl',
   [string]$DataRoot = 'C:\ProgramData\FuneralControl\v2',
   [string]$DiagnosticRoot = (Join-Path $env:ProgramData 'FuneralControl-Installer\logs'),
+  [string]$DesktopPath = [Environment]::GetFolderPath('Desktop'),
   [string]$ManifestPath = (Join-Path $PSScriptRoot '..\installer\FuneralControlV2.manifest.psd1'),
   [switch]$DryRun,
   [switch]$AsJson
@@ -265,14 +266,24 @@ try {
   & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -NoBrowser
   if (-not $?) { throw 'Não foi possível validar o aplicativo local.' }
 
-  $desktop = [Environment]::GetFolderPath('Desktop')
+  $desktop = [IO.Path]::GetFullPath($DesktopPath)
+  if (-not (Test-Path -LiteralPath $desktop -PathType Container)) { throw 'A pasta Área de Trabalho informada não existe.' }
   $currentStage = 'atalho'
   Write-FuneralControlInstallLog -Path $logPath -Message 'Criando o atalho do sistema.'
-  $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'FuneralControl.lnk'))
-  $shortcut.TargetPath = Join-Path $InstallRoot 'FuneralControlV2.cmd'
+  $shortcutPath = Join-Path $desktop 'FuneralControl.lnk'
+  $targetPath = Join-Path $InstallRoot 'FuneralControlV2.cmd'
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($shortcutPath)
+  $shortcut.TargetPath = $targetPath
   $shortcut.WorkingDirectory = $InstallRoot
   $shortcut.IconLocation = "$($shortcut.TargetPath),0"
   $shortcut.Save()
+  if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) { throw 'O Windows não criou o atalho do FuneralControl.' }
+  $verifiedShortcut = $shell.CreateShortcut($shortcutPath)
+  if (-not [string]::Equals([IO.Path]::GetFullPath($verifiedShortcut.TargetPath), [IO.Path]::GetFullPath($targetPath), [StringComparison]::OrdinalIgnoreCase)) {
+    Remove-Item -LiteralPath $shortcutPath -Force -ErrorAction SilentlyContinue
+    throw 'O atalho criado não aponta para o lançador esperado.'
+  }
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'shortcutCreated' -State @{
     appVersion = $manifest.Runtime.Version
     installerVersion = $installerVersion
