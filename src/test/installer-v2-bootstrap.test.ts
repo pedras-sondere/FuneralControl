@@ -25,6 +25,12 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("FuneralControl-Installer\\logs");
     expect(script).toContain("instalacao-atual.log");
     expect(script).toContain("$runId = [guid]::NewGuid().ToString('N')");
+    expect(script).toContain("$runStagingRoot = Join-Path $paths.StagingRoot $runId");
+    expect(script).toContain("-StagingRoot $runStagingRoot");
+    expect(script).toContain("[IO.File]::Move($partial, $destination)");
+    expect(script).not.toContain(
+      "Move-Item -LiteralPath $partial -Destination $destination -Force",
+    );
     expect(script).toContain("installerVersion");
     expect(script).toContain("installerBuild");
     expect(script).toContain("$currentStage");

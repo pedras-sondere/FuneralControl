@@ -4,7 +4,7 @@ param(
   [string]$DataRoot = 'C:\ProgramData\FuneralControl',
   [string]$DesktopPath = [Environment]::GetFolderPath('Desktop'),
   [string]$LogPath = (Join-Path $env:ProgramData 'FuneralControl-Installer\logs\desinstalacao-atual.log'),
-  [string]$InstallerVersion = '2.1.0-rc.1',
+  [string]$InstallerVersion = '2.1.0-rc.2',
   [switch]$AllowLegacyCleanup,
   [switch]$DryRun,
   [switch]$AsJson
@@ -56,11 +56,25 @@ function Assert-FuneralControlManagedPath {
 }
 
 function Test-FuneralControlPrivateProcess {
-  param([Parameter(Mandatory)]$Process, [Parameter(Mandatory)][string]$ManagedRoot)
-  if ([string]::IsNullOrWhiteSpace([string]$Process.ExecutablePath)) { return $false }
-  $root = (Get-FuneralControlCanonicalPath -Path $ManagedRoot) + [IO.Path]::DirectorySeparatorChar
-  $executable = [IO.Path]::GetFullPath([string]$Process.ExecutablePath)
-  $executable.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)
+  param(
+    [Parameter(Mandatory)]$Process,
+    [Parameter(Mandatory)][string]$ManagedInstallRoot,
+    [Parameter(Mandatory)][string]$ManagedDataRoot
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace([string]$Process.ExecutablePath)) {
+    $installPrefix = (Get-FuneralControlCanonicalPath -Path $ManagedInstallRoot) + [IO.Path]::DirectorySeparatorChar
+    $executable = [IO.Path]::GetFullPath([string]$Process.ExecutablePath)
+    if ($executable.StartsWith($installPrefix, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+  }
+
+  $commandLine = [string]$Process.CommandLine
+  if ([string]::IsNullOrWhiteSpace($commandLine)) { return $false }
+  foreach ($managedRoot in @($ManagedInstallRoot, $ManagedDataRoot)) {
+    $canonicalRoot = Get-FuneralControlCanonicalPath -Path $managedRoot
+    if ($commandLine.IndexOf($canonicalRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+  }
+  return $false
 }
 
 function Stop-FuneralControlPrivateProcesses {
@@ -78,7 +92,7 @@ function Stop-FuneralControlPrivateProcesses {
   Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
     Where-Object {
       $_.Name -in @('node.exe', 'postgres.exe') -and
-      (Test-FuneralControlPrivateProcess -Process $_ -ManagedRoot $ManagedInstallRoot)
+      (Test-FuneralControlPrivateProcess -Process $_ -ManagedInstallRoot $ManagedInstallRoot -ManagedDataRoot $ManagedDataRoot)
     } |
     ForEach-Object {
       Write-FuneralControlUninstallLog -Message "Encerrando processo privado $($_.Name), PID $($_.ProcessId)."
@@ -100,6 +114,10 @@ function Grant-FuneralControlCleanupAccess {
   }
 
   $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $resetOutput = & icacls.exe $Path '/reset' '/T' '/C' '/Q' 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível restaurar as permissões herdadas de $Path. $($resetOutput -join ' ')"
+  }
   $accessOutput = & icacls.exe $Path '/grant:r' '*S-1-5-32-544:(OI)(CI)F' "*${sid}:(OI)(CI)F" '/T' '/C' '/Q' 2>&1
   if ($LASTEXITCODE -ne 0) {
     throw "Não foi possível recuperar as permissões de $Path. $($accessOutput -join ' ')"
@@ -115,9 +133,14 @@ function Remove-FuneralControlManagedDirectory {
       Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
       return
     } catch {
-      if ($attempt -eq 3) { throw }
-      Write-FuneralControlUninstallLog -Message "Aguardando liberação de arquivos em $Path (tentativa $attempt de 3)."
+      $errorTarget = [string]$_.TargetObject
+      $errorId = [string]$_.FullyQualifiedErrorId
+      if ($attempt -eq 3) {
+        throw "Não foi possível remover $Path. Alvo: $errorTarget. Identificador: $errorId. $($_.Exception.Message)"
+      }
+      Write-FuneralControlUninstallLog -Message "Aguardando liberação de arquivos em $Path (tentativa $attempt de 3). Alvo: $errorTarget. Identificador: $errorId."
       Start-Sleep -Seconds 2
+      Grant-FuneralControlCleanupAccess -Path $Path
     }
   }
 }

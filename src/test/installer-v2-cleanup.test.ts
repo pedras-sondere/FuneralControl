@@ -16,9 +16,14 @@ describe("remoção controlada do instalador v2", () => {
     expect(source).toContain("managed-installation.json");
     expect(source).toContain("takeown.exe");
     expect(source).toContain("icacls.exe");
+    expect(source).toContain("'/reset'");
     expect(source).toContain("Remove-Item -LiteralPath $Path -Recurse -Force");
     expect(source).toContain("Test-FuneralControlPrivateProcess");
     expect(source).toContain("ExecutablePath");
+    expect(source).toContain("CommandLine");
+    expect(source).toContain("ManagedDataRoot");
+    expect(source).toContain("FullyQualifiedErrorId");
+    expect(source).toContain("TargetObject");
     expect(source).toContain("Confirm-FuneralControlTargetAbsent");
     expect(source).toContain("FuneralControl.lnk");
   });

@@ -94,11 +94,14 @@ function Get-FuneralControlAsset {
   $destination = Join-Path $StagingRoot $name
   $partial = "$destination.partial"
   Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+  if (Test-Path -LiteralPath $destination) {
+    throw "A pasta temporária exclusiva já contém o arquivo $name."
+  }
   Invoke-WebRequest -Uri $Asset.Url -OutFile $partial -UseBasicParsing
   if ((Get-Item -LiteralPath $partial).Length -ne [long]$Asset.Size) { throw "O tamanho do arquivo $name não confere." }
   $hash = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash
   if ($hash -ne $Asset.Sha256) { throw "O SHA-256 do arquivo $name não confere." }
-  Move-Item -LiteralPath $partial -Destination $destination -Force
+  [IO.File]::Move($partial, $destination)
   return $destination
 }
 
@@ -145,6 +148,7 @@ function Move-FuneralControlSingleRoot {
 }
 
 $paths = Get-FuneralControlPaths -InstallRoot $InstallRoot -DataRoot $DataRoot
+$runStagingRoot = Join-Path $paths.StagingRoot $runId
 $result = [ordered]@{ ok = $true; installRoot = $InstallRoot; dataRoot = $DataRoot; desktopShortcut = $true }
 if ($DryRun) { if ($AsJson) { $result | ConvertTo-Json -Compress }; exit 0 }
 
@@ -170,7 +174,7 @@ try {
     throw 'O pacote do PostgreSQL não corresponde à versão ou arquitetura informada.'
   }
 
-  New-Item -ItemType Directory -Path $paths.StagingRoot, $paths.LogRoot -Force | Out-Null
+  New-Item -ItemType Directory -Path $runStagingRoot, $paths.LogRoot -Force | Out-Null
   $currentStage = 'pre-verificacao'
   Write-FuneralControlInstallLog -Path $logPath -Message 'Pré-verificação do instalador v2 concluída.'
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -193,9 +197,9 @@ try {
   [IO.File]::WriteAllText($ownershipMarker, $ownershipPayload, [Text.UTF8Encoding]::new($false))
 
   $currentStage = 'downloads'
-  $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -AllowedHost 'nodejs.org' -StagingRoot $paths.StagingRoot
-  $postgresArchive = Get-FuneralControlAsset -Asset $manifest.PostgreSQL -AllowedHost 'get.enterprisedb.com' -StagingRoot $paths.StagingRoot
-  $runtimeArchive = Get-FuneralControlAsset -Asset $manifest.Runtime -AllowedHost 'github.com' -StagingRoot $paths.StagingRoot
+  $nodeArchive = Get-FuneralControlAsset -Asset $manifest.Node -AllowedHost 'nodejs.org' -StagingRoot $runStagingRoot
+  $postgresArchive = Get-FuneralControlAsset -Asset $manifest.PostgreSQL -AllowedHost 'get.enterprisedb.com' -StagingRoot $runStagingRoot
+  $runtimeArchive = Get-FuneralControlAsset -Asset $manifest.Runtime -AllowedHost 'github.com' -StagingRoot $runStagingRoot
   Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'verified' -State @{
     appVersion = $manifest.Runtime.Version
     installerVersion = $installerVersion
@@ -207,7 +211,7 @@ try {
   if (-not (Test-Path -LiteralPath (Join-Path $paths.NodeRoot 'node.exe'))) {
     $currentStage = 'extracao-node'
     Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o Node.js privado.'
-    $nodeStaging = Join-Path $paths.StagingRoot 'node'
+    $nodeStaging = Join-Path $runStagingRoot 'node'
     Remove-Item -LiteralPath $nodeStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $nodeArchive -Destination $nodeStaging
     Move-FuneralControlSingleRoot -StagingDirectory $nodeStaging -Destination $paths.NodeRoot -RequiredRelativePath 'node.exe'
@@ -216,7 +220,7 @@ try {
   if (-not (Test-Path -LiteralPath (Join-Path $paths.PostgresRoot 'bin\initdb.exe'))) {
     $currentStage = 'extracao-postgresql'
     Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o PostgreSQL privado.'
-    $postgresStaging = Join-Path $paths.StagingRoot 'postgresql'
+    $postgresStaging = Join-Path $runStagingRoot 'postgresql'
     Remove-Item -LiteralPath $postgresStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $postgresArchive -Destination $postgresStaging
     Move-FuneralControlSingleRoot -StagingDirectory $postgresStaging -Destination $paths.PostgresRoot -RequiredRelativePath 'bin\initdb.exe'
@@ -239,7 +243,7 @@ try {
   if (-not (Test-Path -LiteralPath $appRoot)) {
     $currentStage = 'extracao-aplicativo'
     Write-FuneralControlInstallLog -Path $logPath -Message 'Extraindo o aplicativo local.'
-    $appStaging = Join-Path $paths.StagingRoot 'application'
+    $appStaging = Join-Path $runStagingRoot 'application'
     Remove-Item -LiteralPath $appStaging -Force -Recurse -ErrorAction SilentlyContinue
     Expand-FuneralControlSafeArchive -Archive $runtimeArchive -Destination $appStaging
     foreach ($required in @('runtime-manifest.json', 'dist\server\server.js', 'node_modules\srvx\bin\srvx.mjs')) {
@@ -295,6 +299,8 @@ try {
   $failureType = $_.Exception.GetType().FullName
   Write-FuneralControlInstallLog -Path $logPath -Level 'ERRO' -Message "Falha [$failureType]: $($_.Exception.Message)"
   throw
+} finally {
+  Remove-Item -LiteralPath $runStagingRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($AsJson) { $result | ConvertTo-Json -Compress }
