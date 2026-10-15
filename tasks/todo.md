@@ -30,13 +30,13 @@
 ## Etapa 4 — GitHub Releases
 
 - [x] Auditar pacote, allowlist e ausência de conteúdo pessoal.
-- [ ] Confirmar origem do GitHub e ativo imutável.
+- [x] Confirmar origem do GitHub e ativo imutável.
 - [x] Testar atualização manual na abertura.
 - [x] Fazer commit.
 
 ## Checkpoint 2
 
-- [ ] Downloads e hashes passam.
+- [x] Downloads e hashes passam.
 - [x] Runtime corresponde ao manifesto.
 - [x] Nenhum runtime/serviço global é usado.
 
@@ -62,9 +62,9 @@
 
 ## Etapa 7 — Release candidata e aceite
 
-- [ ] Gerar versão/nome únicos e imutáveis.
-- [ ] Executar lint, testes, build e Inno.
-- [ ] Auditar segredos e conteúdo do pacote.
-- [ ] Publicar candidato com SHA-256 verificado.
+- [x] Gerar versão/nome únicos e imutáveis.
+- [x] Executar lint, testes, build e Inno.
+- [x] Auditar segredos e conteúdo do pacote.
+- [x] Publicar candidato com SHA-256 verificado.
 - [ ] Executar matriz em Windows limpo.
 - [ ] Marcar como final somente após instalação real aprovada.
