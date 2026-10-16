@@ -22,6 +22,9 @@ describe("remoção controlada do instalador v2", () => {
     expect(source).toContain("ExecutablePath");
     expect(source).toContain("CommandLine");
     expect(source).toContain("ManagedDataRoot");
+    expect(source).toContain("$stopExitCode = $LASTEXITCODE");
+    expect(source).toContain("$ErrorActionPreference = 'Continue'");
+    expect(source).toContain("verificando processos remanescentes");
     expect(source).toContain("FullyQualifiedErrorId");
     expect(source).toContain("TargetObject");
     expect(source).toContain("Confirm-FuneralControlTargetAbsent");

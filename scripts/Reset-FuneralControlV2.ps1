@@ -84,8 +84,19 @@ function Stop-FuneralControlPrivateProcesses {
   $pgCtl = Join-Path $ManagedInstallRoot 'runtime\postgresql\bin\pg_ctl.exe'
   if ((Test-Path -LiteralPath $pgCtl -PathType Leaf) -and (Test-Path -LiteralPath $postgresData -PathType Container)) {
     Write-FuneralControlUninstallLog -Message 'Solicitando o encerramento do PostgreSQL privado.'
-    & $pgCtl '-D' $postgresData '-w' '-t' '30' 'stop' '-m' 'fast' 2>&1 | ForEach-Object {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      $stopOutput = @(& $pgCtl '-D' $postgresData '-w' '-t' '30' 'stop' '-m' 'fast' 2>&1)
+      $stopExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $stopOutput | ForEach-Object {
       Write-FuneralControlUninstallLog -Message ([string]$_)
+    }
+    if ($stopExitCode -ne 0) {
+      Write-FuneralControlUninstallLog -Message 'O PostgreSQL não confirmou o encerramento; verificando processos remanescentes antes da limpeza.'
     }
   }
 
