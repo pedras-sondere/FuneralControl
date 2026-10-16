@@ -92,8 +92,11 @@ if ((Test-Path $paths.PostgresData) -and -not (Test-Path $paths.StatePath)) {
 }
 
 Write-FuneralControlDatabaseLog -Message 'Aplicando permissões aos dados locais.'
-Protect-FuneralControlData -Directory $DataRoot -Sid $AuthorizedSid
-foreach ($directory in @($paths.ConfigRoot, $paths.UploadRoot, $paths.StagingRoot, $paths.LogRoot)) {
+# O estado global da instalação fica fora deste endurecimento recursivo. Ele é
+# mantido pelo instalador e pelo launcher, que precisam atualizá-lo depois que o
+# banco é configurado. Somente os diretórios com dados sensíveis recebem ACL
+# exclusiva aqui.
+foreach ($directory in @($paths.ConfigRoot, $paths.PostgresData, $paths.UploadRoot, $paths.StagingRoot, $paths.LogRoot)) {
   Protect-FuneralControlData -Directory $directory -Sid $AuthorizedSid
 }
 Write-FuneralControlDatabaseLog -Message 'Permissões dos dados locais concluídas.'
@@ -188,7 +191,6 @@ ALTER ROLE funeralcontrol_app PASSWORD '$appPassword';
   }
   Set-FuneralControlProtectedConfig -Path $configPath -Config $protectedConfig
   Protect-FuneralControlData -Directory $paths.ConfigRoot -Sid $AuthorizedSid
-  Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'databaseConfigured' -State @{ port = $Port; authorizedSid = $AuthorizedSid }
   Write-FuneralControlDatabaseLog -Message 'Banco de dados local configurado.'
 } finally {
   if ($null -eq $originalPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $originalPgPassword }

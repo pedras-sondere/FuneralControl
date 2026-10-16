@@ -264,6 +264,15 @@ try {
   Write-FuneralControlInstallLog -Path $logPath -Message 'Iniciando a configuração do banco local.'
   & (Join-Path $PSScriptRoot 'Configure-FuneralControlDatabaseV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -RuntimePostgresRoot $paths.PostgresRoot -AuthorizedSid $sid -LogPath $logPath
   if (-not $?) { throw 'Não foi possível preparar o banco de dados local.' }
+  Repair-FuneralControlStateAccess -StatePath $paths.StatePath -Sid $sid
+  Set-FuneralControlPhase -StatePath $paths.StatePath -Phase 'databaseConfigured' -State @{
+    appVersion = $manifest.Runtime.Version
+    installerVersion = $installerVersion
+    installerBuild = $installerBuild
+    runId = $runId
+    port = 54329
+    authorizedSid = $sid
+  }
 
   $currentStage = 'validacao-aplicativo'
   Write-FuneralControlInstallLog -Path $logPath -Message 'Validando a inicialização do aplicativo local.'

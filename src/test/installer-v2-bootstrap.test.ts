@@ -19,6 +19,18 @@ describe("bootstrap do instalador v2", () => {
     expect(script).toContain("Extraindo o PostgreSQL privado");
     expect(script).toContain("Iniciando a configuração do banco local");
     expect(script).toContain("-LogPath $logPath");
+    const databaseConfiguration = script.indexOf("Configure-FuneralControlDatabaseV2.ps1");
+    const repairedStateAfterDatabase = script.indexOf(
+      "Repair-FuneralControlStateAccess -StatePath $paths.StatePath -Sid $sid",
+      databaseConfiguration,
+    );
+    const databaseConfiguredPhase = script.indexOf(
+      "-Phase 'databaseConfigured'",
+      repairedStateAfterDatabase,
+    );
+    expect(databaseConfiguration).toBeGreaterThan(-1);
+    expect(repairedStateAfterDatabase).toBeGreaterThan(databaseConfiguration);
+    expect(databaseConfiguredPhase).toBeGreaterThan(repairedStateAfterDatabase);
     expect(script).toContain("Write-Host $safeMessage");
     expect(script).toContain("Repair-FuneralControlStateAccess");
     expect(script).toContain('"*${Sid}:(OI)(CI)M"');

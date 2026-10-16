@@ -31,6 +31,9 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain("$postgresLog = Join-Path $paths.LogRoot 'postgresql.log'");
     expect(script).toContain("'-l' $postgresLog '-w' '-t' '30' 'start'");
     expect(script).not.toContain("'start' | Out-Null");
+    expect(script).not.toContain("Set-FuneralControlPhase");
+    expect(script).not.toContain("Protect-FuneralControlData -Directory $DataRoot");
+    expect(script).toContain("$paths.PostgresData");
     expect(script).not.toContain("@psqlArguments '-c' $roleSql");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");
