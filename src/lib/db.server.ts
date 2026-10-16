@@ -1,6 +1,7 @@
 import pg from "pg";
 import { hashPassword } from "./password.server";
-import { readAdminConfig, readDatabaseConfig } from "./runtime-config.server";
+import { readDatabaseConfig, readInitialAdminConfig } from "./runtime-config.server";
+import { assertSchemaCompatibility, CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 let client: pg.Pool | undefined;
 let ready: Promise<void> | undefined;
@@ -11,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   name text NOT NULL,
   email text NOT NULL UNIQUE,
   password_hash text NOT NULL,
+  must_change_password boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -92,26 +94,46 @@ CREATE TABLE IF NOT EXISTS backup_runs (
   created_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version int PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 async function init(dbClient: pg.Pool) {
-  await dbClient.query(SCHEMA);
-  await dbClient.query(
-    "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
-  );
-  await dbClient.query(
-    "INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
-  );
+  if (process.env["FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION"] !== "true") {
+    const { rows } = await dbClient
+      .query<{ version: number }>("SELECT max(version)::int AS version FROM schema_migrations")
+      .catch(() => {
+        throw new Error("O esquema do banco não foi preparado para este runtime local.");
+      });
+    const compatibility = assertSchemaCompatibility({ installed: Number(rows[0]?.version ?? 0) });
+    if (!compatibility.ok) throw new Error(compatibility.reason);
+  } else {
+    await dbClient.query(SCHEMA);
+    await dbClient.query(
+      "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
+    );
+    await dbClient.query(
+      "INSERT INTO backup_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
+    );
+    await dbClient.query(
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false",
+    );
+    await dbClient.query(
+      "INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING",
+      [CURRENT_SCHEMA_VERSION],
+    );
+  }
 
   // Cria usuário administrador inicial se não existir.
   const { rows } = await dbClient.query("SELECT count(*)::int AS n FROM users");
   if (Number(rows[0]?.n || 0) === 0) {
-    const { email, password } = readAdminConfig(process.env);
-    await dbClient.query("INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3)", [
-      "Administrador",
-      email.toLowerCase(),
-      await hashPassword(password),
-    ]);
+    const { email, password } = readInitialAdminConfig(process.env);
+    await dbClient.query(
+      "INSERT INTO users (name, email, password_hash, must_change_password) VALUES ($1,$2,$3,true)",
+      ["Administrador", email.toLowerCase(), await hashPassword(password)],
+    );
     console.log("[Banco de Dados] Usuário administrador inicial criado.");
   }
 

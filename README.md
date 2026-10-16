@@ -42,6 +42,6 @@ npm run dev
 
 ## Instalador Windows
 
-O arquivo `installer/FuneralControl.iss` gera o instalador `.exe` pelo Inno Setup em um computador Windows. A instalação inicial exige internet e permissões de administrador. Ela verifica os requisitos, instala Node.js e PostgreSQL quando necessário, cria o banco local e deixa apenas o atalho **FuneralControl** na área de trabalho.
+O arquivo `installer/FuneralControlV2.iss` gera o assistente único de **Instalação** e **Desinstalação completa**. A instalação inicial exige internet, Windows 64 bits, 4 GB livres e confirmação de administrador. Node.js e PostgreSQL ficam privados na pasta do FuneralControl; Docker, serviços globais e instalações separadas não são necessários.
 
-Antes de considerar a instalação concluída, confirme: conexão ao PostgreSQL, disponibilidade do `pg_dump`, abertura em `http://localhost:3000` e configuração das três pastas de backup. Reexecutar o instalador preserva o banco, `.env`, documentos e backups já existentes.
+O atalho **FuneralControl** só é criado após PostgreSQL, aplicação e `/api/health` responderem corretamente. Os registros ficam em `C:\ProgramData\FuneralControl-Installer\logs`. A opção **Desinstalação completa** apaga o programa, todo o banco/dados locais e o atalho após confirmação explícita; faça backup antes de escolhê-la.
