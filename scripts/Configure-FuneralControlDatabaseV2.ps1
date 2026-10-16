@@ -99,6 +99,7 @@ foreach ($directory in @($paths.ConfigRoot, $paths.UploadRoot, $paths.StagingRoo
 Write-FuneralControlDatabaseLog -Message 'Permissões dos dados locais concluídas.'
 
 $configPath = Join-Path $paths.ConfigRoot 'runtime.dpapi'
+$postgresLog = Join-Path $paths.LogRoot 'postgresql.log'
 $existingConfig = Read-FuneralControlProtectedConfig -Path $configPath
 $clusterExists = Test-Path -LiteralPath (Join-Path $paths.PostgresData 'PG_VERSION') -PathType Leaf
 $secretFile = Join-Path $paths.StagingRoot ("postgres-" + [guid]::NewGuid() + '.secret')
@@ -134,7 +135,7 @@ password_encryption = 'scram-sha-256'
   & $pgIsReady '-h' '127.0.0.1' '-p' "$Port" '-t' '1' | Out-Null
   if ($LASTEXITCODE -ne 0) {
     Write-FuneralControlDatabaseLog -Message 'Iniciando o PostgreSQL privado.'
-    & $pgCtl '-D' $paths.PostgresData '-w' '-t' '30' 'start' | Out-Null
+    & $pgCtl '-D' $paths.PostgresData '-l' $postgresLog '-w' '-t' '30' 'start'
     Assert-LastExitCode 'iniciar o PostgreSQL privado'
     Write-FuneralControlDatabaseLog -Message 'PostgreSQL privado iniciado.'
   }

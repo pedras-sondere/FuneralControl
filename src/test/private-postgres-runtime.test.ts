@@ -28,6 +28,9 @@ describe("PostgreSQL privado", () => {
     expect(script).toContain("'-U', 'funeralcontrol_app', '-d', 'funeralcontrol'");
     expect(script).toContain("Conexão da aplicação com o banco funeralcontrol validada");
     expect(script).toContain("Assert-FuneralControlDatabasePath");
+    expect(script).toContain("$postgresLog = Join-Path $paths.LogRoot 'postgresql.log'");
+    expect(script).toContain("'-l' $postgresLog '-w' '-t' '30' 'start'");
+    expect(script).not.toContain("'start' | Out-Null");
     expect(script).not.toContain("@psqlArguments '-c' $roleSql");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");

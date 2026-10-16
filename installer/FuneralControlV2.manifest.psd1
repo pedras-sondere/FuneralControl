@@ -1,8 +1,8 @@
 @{
   SchemaVersion = 2
   Installer = @{
-    Version = '2.1.0-rc.2'
-    BuildId = '20261015.2'
+    Version = '2.1.0-rc.3'
+    BuildId = '20261016.1'
   }
   Runtime = @{
     Version = '2.0.1'

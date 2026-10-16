@@ -4,7 +4,7 @@ param(
   [string]$DataRoot = 'C:\ProgramData\FuneralControl',
   [string]$DesktopPath = [Environment]::GetFolderPath('Desktop'),
   [string]$LogPath = (Join-Path $env:ProgramData 'FuneralControl-Installer\logs\desinstalacao-atual.log'),
-  [string]$InstallerVersion = '2.1.0-rc.2',
+  [string]$InstallerVersion = '2.1.0-rc.3',
   [switch]$AllowLegacyCleanup,
   [switch]$DryRun,
   [switch]$AsJson
