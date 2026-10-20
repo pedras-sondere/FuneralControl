@@ -5,7 +5,7 @@ import { isValidCpf, normalizeCpf } from "./cpf";
 import { canAddBeneficiary } from "./business-rules";
 import { errorCode, errorMessage } from "./error-message";
 
-const auth = async () => (await import("./auth.server")).requireUser();
+const auth = async () => (await import("./auth.server")).requireMutableUser();
 const sql = async () => (await import("./db.server")).q;
 const assertMutable = async () => (await import("./backup-guard.server")).requireMutableOperation();
 const cpfSchema = z.string().refine(isValidCpf, "CPF inválido").transform(normalizeCpf);
@@ -30,15 +30,16 @@ export const login = createServerFn({ method: "POST" })
       const q = await sql();
       const { verifyPassword } = await import("./password.server");
       const { createSession } = await import("./auth.server");
-      const rows = await q("SELECT id, password_hash FROM users WHERE email = $1", [
-        data.email.toLowerCase(),
-      ]);
+      const rows = await q(
+        "SELECT id, password_hash, must_change_password FROM users WHERE email = $1",
+        [data.email.toLowerCase()],
+      );
       const u = rows[0];
       if (!u || !(await verifyPassword(data.password, u.password_hash))) {
         return { ok: false as const, error: "E-mail ou senha inválidos" };
       }
       await createSession(u.id);
-      return { ok: true as const };
+      return { ok: true as const, mustChangePassword: Boolean(u.must_change_password) };
     } catch (err: unknown) {
       console.error("Erro no login:", err);
       const message = errorMessage(err, "Erro interno ao processar login");
@@ -60,6 +61,15 @@ export const logout = createServerFn({ method: "POST" }).handler(async () => {
   await destroySession();
   return { ok: true };
 });
+
+export const changePassword = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { changeOwnPassword } = await import("./auth.server");
+    return changeOwnPassword(data);
+  });
 
 type BackupDestination = "local" | "nuvem" | "externo";
 type AutomaticBackupSummary = {
@@ -193,24 +203,28 @@ export const checkForUpdate = createServerFn({ method: "GET" }).handler(async ()
 });
 
 const updateRequestSchema = z.object({
-  packageUrl: z
-    .string()
-    .url()
-    .refine(
-      (url) => url.startsWith("https://github.com/pedras-sondere/FuneralControl/"),
-      "Pacote de atualização inválido.",
-    ),
-  sha256: z.string().regex(/^[a-fA-F0-9]{64}$/, "Hash da atualização inválido."),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/, "Versão de atualização inválida."),
 });
 
 export const startUpdate = createServerFn({ method: "POST" })
   .validator((data: unknown) => updateRequestSchema.parse(data))
   .handler(async ({ data }) => {
     const user = await auth();
-    const { getInstalledApplicationRoot, buildUpdateCommand } =
+    const { APP_VERSION } = await import("./app-version");
+    const { getAvailableRelease } = await import("./github-releases.server");
+    const release = await getAvailableRelease(APP_VERSION);
+    if (!release || release.version !== data.version) {
+      return {
+        ok: false as const,
+        error: "A versão solicitada não está disponível no GitHub Releases.",
+      };
+    }
+
+    const { getInstalledApplicationRoot, getInstalledDataRoot, buildElevatedUpdateCommand } =
       await import("./update-trigger.server");
     const installRoot = getInstalledApplicationRoot(process.env);
-    if (!installRoot) {
+    const dataRoot = getInstalledDataRoot(process.env);
+    if (!installRoot || !dataRoot) {
       return {
         ok: false as const,
         error:
@@ -220,7 +234,7 @@ export const startUpdate = createServerFn({ method: "POST" })
 
     const path = await import("node:path");
     const { access } = await import("node:fs/promises");
-    const scriptPath = path.join(installRoot, "scripts", "Update-FuneralControl.ps1");
+    const scriptPath = path.join(installRoot, "bootstrap", "Update-FuneralControlV2.ps1");
     try {
       await access(scriptPath);
     } catch {
@@ -245,7 +259,14 @@ export const startUpdate = createServerFn({ method: "POST" })
     const { spawn } = await import("node:child_process");
     const updateProcess = spawn(
       "powershell.exe",
-      buildUpdateCommand({ installRoot, packageUrl: data.packageUrl, sha256: data.sha256 }),
+      buildElevatedUpdateCommand({
+        installRoot,
+        dataRoot,
+        version: release.version,
+        size: release.size,
+        packageUrl: release.packageUrl,
+        sha256: release.sha256,
+      }),
       { detached: true, stdio: "ignore", windowsHide: true },
     );
     updateProcess.unref();

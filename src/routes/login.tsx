@@ -39,7 +39,7 @@ function LoginPage() {
         toast.error(res.error || "Credenciais inválidas");
       } else {
         toast.success("Acesso autorizado com sucesso!");
-        navigate({ to: "/" });
+        navigate({ to: res.mustChangePassword ? "/change-password" : "/" });
       }
     } catch (err: unknown) {
       toast.error(errorMessage(err, "Não foi possível conectar ao servidor"));
