@@ -41,13 +41,14 @@ $appRoot = Join-Path $paths.AppRoot ([string]$state.appVersion)
 $node = Join-Path $paths.NodeRoot 'node.exe'
 $pgCtl = Join-Path $paths.PostgresRoot 'bin\pg_ctl.exe'
 $pgIsReady = Join-Path $paths.PostgresRoot 'bin\pg_isready.exe'
+$postgresLog = Join-Path $paths.LogRoot 'postgresql.log'
 foreach ($required in @($appRoot, $node, $pgCtl, $pgIsReady)) {
   if (-not (Test-Path -LiteralPath $required)) { throw 'A instalação privada do FuneralControl está incompleta. Execute novamente o instalador.' }
 }
 
 & $pgIsReady '-h' '127.0.0.1' '-p' "$($config.port)" '-t' '1' | Out-Null
 if ($LASTEXITCODE -ne 0) {
-  & $pgCtl '-D' ([string]$config.postgresData) '-w' '-t' '30' 'start' | Out-Null
+  & $pgCtl '-D' ([string]$config.postgresData) '-l' $postgresLog '-w' '-t' '30' 'start'
   if ($LASTEXITCODE -ne 0) { throw 'Não foi possível iniciar o banco de dados local do FuneralControl.' }
 }
 

@@ -34,6 +34,27 @@ describe("PostgreSQL privado", () => {
     expect(script).not.toContain("Set-FuneralControlPhase");
     expect(script).not.toContain("Protect-FuneralControlData -Directory $DataRoot");
     expect(script).toContain("$paths.PostgresData");
+    const permissionFunction = script.match(
+      /function Protect-FuneralControlData \{[\s\S]*?\r?\n\}/,
+    )?.[0];
+    expect(permissionFunction).toBeDefined();
+    expect(permissionFunction).toContain("(Join-Path $Directory '*') '/reset' '/T'");
+    expect(permissionFunction).not.toContain(
+      "$Directory '/inheritance:r' '/grant:r' \"*${Sid}:(OI)(CI)F\" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T'",
+    );
+    const protectedConfigWrite = script.indexOf(
+      "Set-FuneralControlProtectedConfig -Path $configPath",
+    );
+    expect(protectedConfigWrite).toBeGreaterThan(-1);
+    expect(
+      script.indexOf(
+        "Protect-FuneralControlData -Directory $paths.ConfigRoot",
+        protectedConfigWrite,
+      ),
+    ).toBe(-1);
+    expect(
+      script.indexOf("Read-FuneralControlProtectedConfig -Path $configPath", protectedConfigWrite),
+    ).toBeGreaterThan(protectedConfigWrite);
     expect(script).not.toContain("@psqlArguments '-c' $roleSql");
     expect(script).not.toContain("Get-Command psql");
     expect(script).not.toContain("Program Files\\PostgreSQL");

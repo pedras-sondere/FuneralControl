@@ -13,7 +13,7 @@ describe("executável do instalador v2", () => {
     expect(source).toContain('-DesktopPath "');
     expect(source).toContain("ExpandConstant('{userdesktop}')");
     expect(source).toContain("instalacao-atual.log");
-    expect(source).toContain("FuneralControl-Instalador-2.1.0-rc.5-build-20261016.3");
+    expect(source).toContain("FuneralControl-Instalador-2.1.0-rc.6-build-20261020.1");
     expect(source).toContain("C:\\ProgramData\\FuneralControl-Installer\\logs");
     expect(source).not.toContain("Install-FuneralControl.ps1");
     expect(source).not.toContain('Source: "..\\dist');

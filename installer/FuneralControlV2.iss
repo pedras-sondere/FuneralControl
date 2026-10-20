@@ -1,6 +1,6 @@
 #define AppName "FuneralControl"
-#define AppVersion "2.1.0-rc.5"
-#define BuildId "20261016.3"
+#define AppVersion "2.1.0-rc.6"
+#define BuildId "20261020.1"
 #define AppPublisher "FuneralControl"
 
 [Setup]
@@ -16,7 +16,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\release
-OutputBaseFilename=FuneralControl-Instalador-2.1.0-rc.5-build-20261016.3
+OutputBaseFilename=FuneralControl-Instalador-2.1.0-rc.6-build-20261020.1
 Compression=lzma2
 SolidCompression=yes
 SetupLogging=yes

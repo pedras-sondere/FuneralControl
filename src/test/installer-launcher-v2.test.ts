@@ -13,6 +13,9 @@ describe("inicializador local v2", () => {
     expect(script).toContain("FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION");
     expect(script).toContain("127.0.0.1");
     expect(script).toContain("pg_ctl.exe");
+    expect(script).toContain("$postgresLog = Join-Path $paths.LogRoot 'postgresql.log'");
+    expect(script).toContain("'-l' $postgresLog '-w' '-t' '30' 'start'");
+    expect(script).not.toContain("'start' | Out-Null");
     expect(script).toContain("-PassThru");
     expect(script).toContain("appPid");
     expect(script).toContain("schemaVersion");

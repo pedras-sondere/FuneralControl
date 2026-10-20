@@ -64,9 +64,21 @@ function Set-FuneralControlProtectedConfig {
 function Protect-FuneralControlData {
   param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][string]$Sid)
   New-Item -ItemType Directory -Path $Directory -Force | Out-Null
-  $output = & icacls.exe $Directory '/inheritance:r' '/grant:r' "*${Sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/T' '/C' 2>&1
+  $output = & icacls.exe $Directory '/inheritance:r' '/grant:r' "*${Sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '/C' 2>&1
   if ($LASTEXITCODE -ne 0) {
     throw "Não foi possível proteger os arquivos locais da instalação (icacls $LASTEXITCODE): $($output -join ' ')"
+  }
+
+  # /grant com (OI)(CI) não deve ser aplicado diretamente aos arquivos: o
+  # Windows aceita o comando, mas cria arquivos sem permissão efetiva. Ao
+  # redefinir somente os descendentes, todos voltam a herdar a ACL segura da
+  # pasta. Isso também recupera instalações parciais das revisões anteriores.
+  $children = @(Get-ChildItem -LiteralPath $Directory -Force)
+  if ($children.Count -gt 0) {
+    $output = & icacls.exe (Join-Path $Directory '*') '/reset' '/T' '/C' '/Q' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "Não foi possível restaurar a herança dos arquivos locais (icacls $LASTEXITCODE): $($output -join ' ')"
+    }
   }
 }
 
@@ -190,7 +202,10 @@ ALTER ROLE funeralcontrol_app PASSWORD '$appPassword';
     initialAdminPassword = $InitialAdminPassword
   }
   Set-FuneralControlProtectedConfig -Path $configPath -Config $protectedConfig
-  Protect-FuneralControlData -Directory $paths.ConfigRoot -Sid $AuthorizedSid
+  $validatedConfig = Read-FuneralControlProtectedConfig -Path $configPath
+  if (-not $validatedConfig -or $validatedConfig.authorizedSid -ne $AuthorizedSid -or $validatedConfig.port -ne $Port) {
+    throw 'A configuração protegida do FuneralControl não pôde ser validada após a gravação.'
+  }
   Write-FuneralControlDatabaseLog -Message 'Banco de dados local configurado.'
 } finally {
   if ($null -eq $originalPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $originalPgPassword }
