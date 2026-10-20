@@ -5,6 +5,14 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "../..");
 
 describe("inicializador local v2", () => {
+  it("remove a barra final do diretório antes de passá-lo ao PowerShell", async () => {
+    const launcher = await readFile(path.join(root, "FuneralControlV2.cmd"), "utf8");
+    expect(launcher).toContain('set "FUNERALCONTROL_ROOT=%~dp0"');
+    expect(launcher).toContain('set "FUNERALCONTROL_ROOT=%FUNERALCONTROL_ROOT:~0,-1%"');
+    expect(launcher).toContain('-InstallRoot "%FUNERALCONTROL_ROOT%"');
+    expect(launcher).not.toContain('-InstallRoot "%~dp0"');
+  });
+
   it("usa somente runtimes privados e injeta as configurações protegidas", async () => {
     const script = await readFile(path.join(root, "scripts", "Start-FuneralControlV2.ps1"), "utf8");
     expect(script).toContain("runtime.dpapi");
