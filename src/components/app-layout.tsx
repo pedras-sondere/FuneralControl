@@ -82,7 +82,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
     { id: "dashboard", label: "Painel", to: "/", icon: LayoutDashboard },
     { id: "holders", label: "Titulares", to: "/holders", icon: Users },
     { id: "plans", label: "Planos", to: "/plans", icon: Layers },
-    { id: "invoices", label: "Faturas", to: "/invoices", icon: Receipt },
+    { id: "invoices", label: "Gestão", to: "/invoices", icon: Receipt },
     { id: "backups", label: "Backups", to: "/backups", icon: HardDrive },
   ];
 

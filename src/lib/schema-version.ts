@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export type SchemaCompatibility = { ok: true } | { ok: false; reason: string };
 

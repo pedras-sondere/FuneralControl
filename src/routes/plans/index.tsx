@@ -125,49 +125,58 @@ function PlansPage() {
               </CardContent>
             </Card>
           ) : (
-            plans.map((plan) => (
-              <Card key={plan.id} className="border-slate-200">
-                <CardHeader className="flex flex-row items-start justify-between">
-                  <div>
-                    <CardTitle>{plan.name}</CardTitle>
-                    <p className="mt-1 text-2xl font-bold text-teal-700">
-                      R$ {Number(plan.monthly_price).toFixed(2)}
-                      <span className="text-sm font-normal text-slate-500">/mês</span>
+            [...plans]
+              .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
+              .map((plan) => (
+                <Card
+                  key={plan.id}
+                  className={
+                    plan.active
+                      ? "border-teal-200 bg-white shadow-sm"
+                      : "border-dashed border-slate-300 bg-slate-50 opacity-75"
+                  }
+                >
+                  <CardHeader className="flex flex-row items-start justify-between">
+                    <div>
+                      <CardTitle>{plan.name}</CardTitle>
+                      <p className="mt-1 text-2xl font-bold text-teal-700">
+                        R$ {Number(plan.monthly_price).toFixed(2)}
+                        <span className="text-sm font-normal text-slate-500">/mês</span>
+                      </p>
+                    </div>
+                    <Badge variant={plan.active ? "default" : "outline"}>
+                      {plan.active ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="min-h-10 text-sm text-slate-600">
+                      {plan.description || "Sem descrição."}
                     </p>
-                  </div>
-                  <Badge variant={plan.active ? "default" : "outline"}>
-                    {plan.active ? "Ativo" : "Inativo"}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="min-h-10 text-sm text-slate-600">
-                    {plan.description || "Sem descrição."}
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span>
-                      Beneficiários: <strong>{plan.max_beneficiaries}</strong>
-                    </span>
-                    <span>
-                      Titulares: <strong>{plan.holders}</strong>
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => edit(plan)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => edit({ ...plan, active: !plan.active })}
-                    >
-                      <Power className="mr-2 h-4 w-4" />
-                      {plan.active ? "Inativar" : "Ativar"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                    <div className="flex justify-between text-sm">
+                      <span>
+                        Beneficiários: <strong>{plan.max_beneficiaries}</strong>
+                      </span>
+                      <span>
+                        Titulares: <strong>{plan.holders}</strong>
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => edit(plan)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => edit({ ...plan, active: !plan.active })}
+                      >
+                        <Power className="mr-2 h-4 w-4" />
+                        {plan.active ? "Inativar" : "Ativar"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
           )}
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canAddBeneficiary, shouldCreateInvoice } from "../lib/business-rules";
+import { canAddBeneficiary, canUsePlanForHolder, shouldCreateInvoice } from "../lib/business-rules";
 
 describe("regras de operação", () => {
   it("respeita o limite de beneficiários do plano", () => {
@@ -11,5 +11,11 @@ describe("regras de operação", () => {
   it("não cria fatura já existente no mesmo mês", () => {
     expect(shouldCreateInvoice(false)).toBe(true);
     expect(shouldCreateInvoice(true)).toBe(false);
+  });
+
+  it("não permite atribuir um plano inativo ao titular", () => {
+    expect(canUsePlanForHolder({ active: true })).toBe(true);
+    expect(canUsePlanForHolder({ active: false })).toBe(false);
+    expect(canUsePlanForHolder(null)).toBe(false);
   });
 });

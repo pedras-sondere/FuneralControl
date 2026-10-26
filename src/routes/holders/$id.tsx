@@ -31,6 +31,8 @@ import {
   saveHolder,
   saveBeneficiary,
   deleteBeneficiary,
+  recordFamilyOccurrence,
+  recordPersonLifecycle,
   uploadContract,
   deleteContract,
   payInvoice,
@@ -70,6 +72,9 @@ type BeneficiaryRecord = {
   cpf: string | null;
   birth_date: string | null;
   relationship: string;
+  status: "ativo" | "falecido" | "cancelado";
+  status_changed_at: string | null;
+  is_current_holder: boolean;
 };
 
 type ContractRecord = {
@@ -118,10 +123,30 @@ function HolderDetailsPage() {
   const router = useRouter();
 
   const { holder, beneficiaries, contracts, invoices } = data;
+  const events = data.events;
 
   // Edit Holder Modal State
   const [isEditHolderOpen, setIsEditHolderOpen] = useState(false);
   const [savingHolder, setSavingHolder] = useState(false);
+  const [isOccurrenceOpen, setIsOccurrenceOpen] = useState(false);
+  const [isLifecycleOpen, setIsLifecycleOpen] = useState(false);
+  const [savingOccurrence, setSavingOccurrence] = useState(false);
+  const [savingLifecycle, setSavingLifecycle] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const [occurrenceForm, setOccurrenceForm] = useState({
+    event_type: "observacao" as "inadimplencia" | "utilizacao" | "observacao" | "outro",
+    beneficiary_id: "none",
+    occurred_on: today,
+    description: "",
+  });
+  const [lifecycleForm, setLifecycleForm] = useState({
+    subject: "titular" as "titular" | "beneficiario",
+    beneficiary_id: "none",
+    status: "falecido" as "falecido" | "cancelado",
+    occurred_on: today,
+    description: "",
+    successor_beneficiary_id: "none",
+  });
   const [holderFormData, setHolderFormData] = useState({
     name: holder.name,
     cpf: holder.cpf,
@@ -132,7 +157,8 @@ function HolderDetailsPage() {
     plan_id: String(holder.plan_id),
     due_day: String(holder.due_day),
     join_date: holder.join_date,
-    status: holder.base_status as "ativo" | "cancelado",
+    monthly_billing_date: holder.monthly_billing_date || "",
+    status: holder.base_status as "ativo" | "falecido" | "cancelado",
   });
 
   // Beneficiary Modal State
@@ -200,6 +226,7 @@ function HolderDetailsPage() {
           plan_id: Number(holderFormData.plan_id),
           due_day: Number(holderFormData.due_day),
           join_date: holderFormData.join_date,
+          monthly_billing_date: holderFormData.monthly_billing_date || null,
           status: holderFormData.status,
         },
       });
@@ -218,9 +245,72 @@ function HolderDetailsPage() {
     }
   };
 
+  const handleSaveOccurrence = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSavingOccurrence(true);
+    try {
+      const result = await recordFamilyOccurrence({
+        data: {
+          holder_id: holder.id,
+          beneficiary_id:
+            occurrenceForm.beneficiary_id === "none" ? null : Number(occurrenceForm.beneficiary_id),
+          event_type: occurrenceForm.event_type,
+          occurred_on: occurrenceForm.occurred_on,
+          description: occurrenceForm.description,
+        },
+      });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Ocorrência registrada no histórico familiar.");
+      setIsOccurrenceOpen(false);
+      setOccurrenceForm({ ...occurrenceForm, description: "" });
+      await router.invalidate();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Não foi possível registrar a ocorrência."));
+    } finally {
+      setSavingOccurrence(false);
+    }
+  };
+
+  const handleSaveLifecycle = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (lifecycleForm.subject === "beneficiario" && lifecycleForm.beneficiary_id === "none") {
+      toast.warning("Selecione o beneficiário.");
+      return;
+    }
+    setSavingLifecycle(true);
+    try {
+      const result = await recordPersonLifecycle({
+        data: {
+          holder_id: holder.id,
+          subject: lifecycleForm.subject,
+          beneficiary_id:
+            lifecycleForm.subject === "beneficiario" ? Number(lifecycleForm.beneficiary_id) : null,
+          status: lifecycleForm.status,
+          occurred_on: lifecycleForm.occurred_on,
+          description: lifecycleForm.description || undefined,
+          successor_beneficiary_id:
+            lifecycleForm.successor_beneficiary_id === "none"
+              ? null
+              : Number(lifecycleForm.successor_beneficiary_id),
+        },
+      });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Situação atualizada e registrada no histórico familiar.");
+      setIsLifecycleOpen(false);
+      await router.invalidate();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Não foi possível atualizar a situação."));
+    } finally {
+      setSavingLifecycle(false);
+    }
+  };
+
   // Handler: Open Beneficiary Modal
   const handleOpenAddBen = () => {
-    if (beneficiaries.length >= holder.max_beneficiaries) {
+    const activeBeneficiaries = beneficiaries.filter(
+      (beneficiary: BeneficiaryRecord) => beneficiary.status === "ativo",
+    );
+    if (activeBeneficiaries.length >= holder.max_beneficiaries) {
       toast.error(`Limite do plano atingido (máximo ${holder.max_beneficiaries} dependentes).`);
       return;
     }
@@ -284,10 +374,13 @@ function HolderDetailsPage() {
 
   // Handler: Delete Beneficiary
   const handleDeleteBen = async (id: number, name: string) => {
-    if (!confirm(`Deseja remover o dependente "${name}"?`)) return;
+    if (
+      !confirm(`Deseja marcar o dependente "${name}" como cancelado? O histórico será preservado.`)
+    )
+      return;
     try {
       await deleteBeneficiary({ data: { id } });
-      toast.success("Dependente removido com sucesso");
+      toast.success("Dependente marcado como cancelado. O histórico foi preservado.");
       router.invalidate();
     } catch (err: unknown) {
       toast.error(errorMessage(err, "Erro ao excluir dependente"));
@@ -372,15 +465,34 @@ function HolderDetailsPage() {
             Voltar para lista de Titulares
           </Link>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditHolderOpen(true)}
-            className="cursor-pointer"
-          >
-            <Edit className="mr-1.5 h-4 w-4 text-slate-500" />
-            Editar Dados
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOccurrenceOpen(true)}
+              className="cursor-pointer"
+            >
+              <PlusCircle className="mr-1.5 h-4 w-4 text-slate-500" /> Registrar ocorrência
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsLifecycleOpen(true)}
+              className="cursor-pointer"
+            >
+              <AlertTriangle className="mr-1.5 h-4 w-4 text-amber-600" /> Falecimento ou
+              cancelamento
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditHolderOpen(true)}
+              className="cursor-pointer"
+            >
+              <Edit className="mr-1.5 h-4 w-4 text-slate-500" />
+              Editar Dados
+            </Button>
+          </div>
         </div>
 
         {/* Titular Header Summary Card */}
@@ -408,6 +520,11 @@ function HolderDetailsPage() {
                   {holder.status === "cancelado" && (
                     <Badge variant="outline" className="text-slate-500">
                       Cancelado
+                    </Badge>
+                  )}
+                  {holder.status === "falecido" && (
+                    <Badge className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none">
+                      Falecido
                     </Badge>
                   )}
                 </div>
@@ -464,6 +581,24 @@ function HolderDetailsPage() {
                 </span>
               </div>
 
+              <div>
+                <span className="text-xs text-slate-400 block">Data-base da Renovação</span>
+                <span className="font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5 mt-0.5">
+                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                  {formatDate(holder.monthly_billing_date)}
+                </span>
+              </div>
+
+              {holder.current_holder_name && (
+                <div>
+                  <span className="text-xs text-slate-400 block">Titular Atual</span>
+                  <span className="font-medium text-teal-700 dark:text-teal-400 flex items-center gap-1.5 mt-0.5">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    {holder.current_holder_name}
+                  </span>
+                </div>
+              )}
+
               <div className="sm:col-span-2 md:col-span-4 pt-2 border-t border-slate-50 dark:border-slate-800">
                 <span className="text-xs text-slate-400 block">Endereço Residencial</span>
                 <span className="font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5 mt-0.5">
@@ -490,6 +625,10 @@ function HolderDetailsPage() {
               <Receipt className="h-4 w-4" />
               Histórico de Faturas ({invoices.length})
             </TabsTrigger>
+            <TabsTrigger value="events" className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Ocorrências ({events.length})
+            </TabsTrigger>
           </TabsList>
 
           {/* ABA 1: BENEFICIÁRIOS */}
@@ -505,7 +644,11 @@ function HolderDetailsPage() {
                 </div>
                 <Button
                   onClick={handleOpenAddBen}
-                  disabled={beneficiaries.length >= holder.max_beneficiaries}
+                  disabled={
+                    beneficiaries.filter(
+                      (beneficiary: BeneficiaryRecord) => beneficiary.status === "ativo",
+                    ).length >= holder.max_beneficiaries
+                  }
                   className="bg-teal-700 hover:bg-teal-800 text-white cursor-pointer"
                   size="sm"
                 >
@@ -533,6 +676,7 @@ function HolderDetailsPage() {
                           <th className="px-5 py-3">CPF</th>
                           <th className="px-5 py-3">Nascimento</th>
                           <th className="px-5 py-3">Parentesco</th>
+                          <th className="px-5 py-3">Situação</th>
                           <th className="px-5 py-3 text-right">Ações</th>
                         </tr>
                       </thead>
@@ -554,6 +698,11 @@ function HolderDetailsPage() {
                             <td className="px-5 py-3.5">
                               <Badge variant="outline" className="text-slate-700 border-slate-300">
                                 {b.relationship}
+                              </Badge>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <Badge variant={b.status === "ativo" ? "default" : "outline"}>
+                                {b.is_current_holder ? "Titular atual" : b.status}
                               </Badge>
                             </td>
                             <td className="px-5 py-3.5 text-right space-x-1">
@@ -578,6 +727,50 @@ function HolderDetailsPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="events" className="space-y-4">
+            <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">Histórico familiar</CardTitle>
+                <CardDescription>
+                  Eventos operacionais e alterações de situação preservados para auditoria.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {events.length === 0 ? (
+                  <p className="px-6 py-12 text-center text-sm text-slate-500">
+                    Nenhuma ocorrência registrada.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {events.map(
+                      (item: {
+                        id: number;
+                        event_type: string;
+                        occurred_on: string;
+                        description: string;
+                        beneficiary_name: string | null;
+                        created_by_name: string | null;
+                      }) => (
+                        <div key={item.id} className="px-5 py-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">{item.event_type}</Badge>
+                            <span className="text-xs text-slate-500">
+                              {formatDate(item.occurred_on)}
+                              {item.beneficiary_name ? ` · ${item.beneficiary_name}` : ""}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                            {item.description}
+                          </p>
+                        </div>
+                      ),
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -800,6 +993,209 @@ function HolderDetailsPage() {
         </Tabs>
       </div>
 
+      <Dialog open={isOccurrenceOpen} onOpenChange={setIsOccurrenceOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar ocorrência</DialogTitle>
+            <DialogDescription>O registro ficará no histórico desta família.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveOccurrence} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Tipo *</Label>
+              <Select
+                value={occurrenceForm.event_type}
+                onValueChange={(value: "inadimplencia" | "utilizacao" | "observacao" | "outro") =>
+                  setOccurrenceForm({ ...occurrenceForm, event_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inadimplencia">Inadimplência</SelectItem>
+                  <SelectItem value="utilizacao">Utilização do plano</SelectItem>
+                  <SelectItem value="observacao">Observação</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Relacionado a</Label>
+              <Select
+                value={occurrenceForm.beneficiary_id}
+                onValueChange={(value) =>
+                  setOccurrenceForm({ ...occurrenceForm, beneficiary_id: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Família / titular original</SelectItem>
+                  {beneficiaries.map((beneficiary: BeneficiaryRecord) => (
+                    <SelectItem key={beneficiary.id} value={String(beneficiary.id)}>
+                      {beneficiary.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data *</Label>
+              <Input
+                type="date"
+                value={occurrenceForm.occurred_on}
+                onChange={(e) =>
+                  setOccurrenceForm({ ...occurrenceForm, occurred_on: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Descrição *</Label>
+              <Input
+                value={occurrenceForm.description}
+                onChange={(e) =>
+                  setOccurrenceForm({ ...occurrenceForm, description: e.target.value })
+                }
+                placeholder="Ex.: Mensalidade de outubro não foi quitada."
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsOccurrenceOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingOccurrence}>
+                {savingOccurrence ? "Salvando..." : "Registrar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isLifecycleOpen} onOpenChange={setIsLifecycleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falecimento ou cancelamento</DialogTitle>
+            <DialogDescription>
+              O cadastro não será excluído. A alteração ficará registrada no histórico familiar.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveLifecycle} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Pessoa *</Label>
+              <Select
+                value={lifecycleForm.subject}
+                onValueChange={(value: "titular" | "beneficiario") =>
+                  setLifecycleForm({ ...lifecycleForm, subject: value, beneficiary_id: "none" })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="titular">Titular original</SelectItem>
+                  <SelectItem value="beneficiario">Beneficiário</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {lifecycleForm.subject === "beneficiario" ? (
+              <div className="space-y-1.5">
+                <Label>Beneficiário *</Label>
+                <Select
+                  value={lifecycleForm.beneficiary_id}
+                  onValueChange={(value) =>
+                    setLifecycleForm({ ...lifecycleForm, beneficiary_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {beneficiaries.map((beneficiary: BeneficiaryRecord) => (
+                      <SelectItem key={beneficiary.id} value={String(beneficiary.id)}>
+                        {beneficiary.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label>Situação *</Label>
+              <Select
+                value={lifecycleForm.status}
+                onValueChange={(value: "falecido" | "cancelado") =>
+                  setLifecycleForm({ ...lifecycleForm, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="falecido">Falecimento</SelectItem>
+                  <SelectItem value="cancelado">Cancelamento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {lifecycleForm.subject === "titular" && lifecycleForm.status === "falecido" ? (
+              <div className="space-y-1.5">
+                <Label>Beneficiário que assume como titular atual</Label>
+                <Select
+                  value={lifecycleForm.successor_beneficiary_id}
+                  onValueChange={(value) =>
+                    setLifecycleForm({ ...lifecycleForm, successor_beneficiary_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Não definir agora" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Não definir agora</SelectItem>
+                    {beneficiaries
+                      .filter((beneficiary: BeneficiaryRecord) => beneficiary.status === "ativo")
+                      .map((beneficiary: BeneficiaryRecord) => (
+                        <SelectItem key={beneficiary.id} value={String(beneficiary.id)}>
+                          {beneficiary.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label>Data *</Label>
+              <Input
+                type="date"
+                value={lifecycleForm.occurred_on}
+                onChange={(e) =>
+                  setLifecycleForm({ ...lifecycleForm, occurred_on: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Observação</Label>
+              <Input
+                value={lifecycleForm.description}
+                onChange={(e) =>
+                  setLifecycleForm({ ...lifecycleForm, description: e.target.value })
+                }
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsLifecycleOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="destructive" disabled={savingLifecycle}>
+                {savingLifecycle ? "Salvando..." : "Confirmar alteração"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal: Editar Titular */}
       <Dialog open={isEditHolderOpen} onOpenChange={setIsEditHolderOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -878,11 +1274,13 @@ function HolderDetailsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {plans.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.name} - R$ {Number(p.monthly_price).toFixed(2)}/mês
-                      </SelectItem>
-                    ))}
+                    {plans
+                      .filter((p) => p.active || String(p.id) === holderFormData.plan_id)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name} - R$ {Number(p.monthly_price).toFixed(2)}/mês
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -914,21 +1312,24 @@ function HolderDetailsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Situação *</Label>
-                <Select
-                  value={holderFormData.status}
-                  onValueChange={(val: "ativo" | "cancelado") =>
-                    setHolderFormData({ ...holderFormData, status: val })
+                <Label className="text-xs font-semibold">
+                  Data-base da mensalidade / renovação
+                </Label>
+                <Input
+                  type="date"
+                  value={holderFormData.monthly_billing_date}
+                  onChange={(e) =>
+                    setHolderFormData({ ...holderFormData, monthly_billing_date: e.target.value })
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Situação</Label>
+                <Input value={holderFormData.status} readOnly className="capitalize bg-slate-50" />
+                <p className="text-xs text-slate-500">
+                  Use “Falecimento ou cancelamento” para preservar a data e o histórico.
+                </p>
               </div>
             </div>
 
