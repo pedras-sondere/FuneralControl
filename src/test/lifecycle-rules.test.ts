@@ -40,10 +40,13 @@ describe("lembretes de renovação anual", () => {
     expect(getRenewalReminder({ monthlyBillingDate: "2024-12-25", today: "2026-11-25" }).kind).toBe(
       "lembrete_30",
     );
-    expect(getRenewalReminder({ monthlyBillingDate: "2024-01-01", today: "2026-12-01" })).toEqual({
-      kind: "lembrete_30",
-      referenceDate: "2027-01-01",
-    });
+    expect(
+      getRenewalReminder({
+        monthlyBillingDate: "2024-01-01",
+        latestCompletedReferenceDate: "2026-01-01",
+        today: "2026-12-01",
+      }),
+    ).toEqual({ kind: "lembrete_30", referenceDate: "2027-01-01" });
     expect(getRenewalReminder({ monthlyBillingDate: "2024-10-20", today: "2026-10-26" }).kind).toBe(
       "atrasada",
     );
