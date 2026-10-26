@@ -68,18 +68,6 @@ CREATE TABLE IF NOT EXISTS contracts (
   size_bytes int NOT NULL,
   uploaded_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE IF NOT EXISTS invoices (
-  id serial PRIMARY KEY,
-  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
-  reference_month text NOT NULL,
-  amount numeric(10,2) NOT NULL,
-  due_date date NOT NULL,
-  status text NOT NULL DEFAULT 'aberta',
-  paid_at date,
-  payment_method text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (holder_id, reference_month)
-);
 CREATE TABLE IF NOT EXISTS family_events (
   id serial PRIMARY KEY,
   holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
@@ -185,6 +173,10 @@ BEGIN
 END $$;
 `;
 
+// A versão 3 encerra definitivamente o módulo legado de faturas. A atualização
+// é executada somente com a migração autorizada pelo inicializador local.
+const INVOICE_RETIREMENT_SCHEMA = `DROP TABLE IF EXISTS invoices;`;
+
 async function init(dbClient: pg.Pool) {
   if (process.env["FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION"] !== "true") {
     const { rows } = await dbClient
@@ -197,6 +189,7 @@ async function init(dbClient: pg.Pool) {
   } else {
     await dbClient.query(SCHEMA);
     await dbClient.query(MANAGEMENT_SCHEMA);
+    await dbClient.query(INVOICE_RETIREMENT_SCHEMA);
     await dbClient.query(
       "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
     );

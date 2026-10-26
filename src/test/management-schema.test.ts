@@ -8,9 +8,10 @@ const root = path.resolve(import.meta.dirname, "../..");
 
 describe("esquema de Gestão", () => {
   it("exige a versão de esquema que suporta histórico familiar", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(2);
+    expect(CURRENT_SCHEMA_VERSION).toBe(3);
     expect(assertSchemaCompatibility({ installed: 1 }).ok).toBe(false);
-    expect(assertSchemaCompatibility({ installed: 2 }).ok).toBe(true);
+    expect(assertSchemaCompatibility({ installed: 2 }).ok).toBe(false);
+    expect(assertSchemaCompatibility({ installed: 3 }).ok).toBe(true);
   });
 
   it("inclui uma migração incremental para o ciclo de vida e a gestão", async () => {
@@ -23,6 +24,7 @@ describe("esquema de Gestão", () => {
       "CREATE TABLE IF NOT EXISTS family_events",
       "CREATE TABLE IF NOT EXISTS holder_successions",
       "CREATE TABLE IF NOT EXISTS renewal_completions",
+      "DROP TABLE IF EXISTS invoices",
     ]) {
       expect(source).toContain(expected);
     }
