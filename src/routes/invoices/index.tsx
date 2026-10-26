@@ -2,12 +2,7 @@ import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-rout
 import { useState } from "react";
 import { Activity, CalendarClock, CheckCircle2, CircleDollarSign, Users } from "lucide-react";
 import { toast } from "sonner";
-import {
-  completeRenewal,
-  getManagementOverview,
-  getMe,
-  listInvoices,
-} from "../../lib/api.functions";
+import { completeRenewal, getManagementOverview, getMe } from "../../lib/api.functions";
 import { AppLayout } from "../../components/app-layout";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -19,20 +14,13 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-
 export const Route = createFileRoute("/invoices/")({
   beforeLoad: async () => {
     const user = await getMe();
     if (!user) throw redirect({ to: "/login" });
     return { user };
   },
-  loader: async () => {
-    const [management, invoices] = await Promise.all([
-      getManagementOverview(),
-      listInvoices({ data: { status: "todas", month: "" } }),
-    ]);
-    return { management, invoices };
-  },
+  loader: () => getManagementOverview(),
   component: ManagementPage,
 });
 
@@ -47,15 +35,13 @@ const formatDate = (value: string) => {
 const renewalLabel: Record<string, string> = {
   sem_data: "Sem data-base",
   em_dia: "Em dia",
-  lembrete_90: "Renovar em até 90 dias",
-  lembrete_60: "Renovar em até 60 dias",
-  lembrete_30: "Renovar em até 30 dias",
+  lembrete_30: "Renovação no próximo mês",
   atrasada: "Renovação pendente",
 };
 
 function ManagementPage() {
   const { user } = Route.useRouteContext();
-  const { management, invoices } = Route.useLoaderData();
+  const management = Route.useLoaderData();
   const router = useRouter();
   const [busyHolderId, setBusyHolderId] = useState<number | null>(null);
   const attentionFamilies = management.families.filter(
@@ -135,7 +121,6 @@ function ManagementPage() {
           <TabsList>
             <TabsTrigger value="renewals">Renovações</TabsTrigger>
             <TabsTrigger value="occurrences">Ocorrências</TabsTrigger>
-            <TabsTrigger value="history">Faturas anteriores</TabsTrigger>
           </TabsList>
           <TabsContent value="renewals">
             <Card>
@@ -166,20 +151,6 @@ function ManagementPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <OccurrenceTable rows={management.recentOccurrences} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle>Histórico legado de faturas</CardTitle>
-                <CardDescription>
-                  Consulta preservada para registros já existentes. Novas renovações são
-                  acompanhadas na aba Renovações.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <InvoiceHistory rows={invoices} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -324,44 +295,6 @@ function OccurrenceTable({ rows }: { rows: Occurrence[] }) {
                 <Badge variant="outline">{item.event_type}</Badge>
               </td>
               <td className="px-5 py-3 text-slate-600">{item.description}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-type Invoice = Awaited<ReturnType<typeof listInvoices>>[number];
-function InvoiceHistory({ rows }: { rows: Invoice[] }) {
-  if (!rows.length)
-    return (
-      <p className="px-6 py-12 text-center text-sm text-slate-500">
-        Nenhuma fatura histórica registrada.
-      </p>
-    );
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-          <tr>
-            <th className="px-5 py-3">Titular</th>
-            <th className="px-5 py-3">Referência</th>
-            <th className="px-5 py-3">Vencimento</th>
-            <th className="px-5 py-3">Valor</th>
-            <th className="px-5 py-3">Situação</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {rows.map((invoice) => (
-            <tr key={invoice.id}>
-              <td className="px-5 py-3 font-medium">{invoice.holder_name}</td>
-              <td className="px-5 py-3">{invoice.reference_month}</td>
-              <td className="px-5 py-3">{formatDate(invoice.due_date)}</td>
-              <td className="px-5 py-3">{money(invoice.amount)}</td>
-              <td className="px-5 py-3">
-                <Badge variant="outline">{invoice.status}</Badge>
-              </td>
             </tr>
           ))}
         </tbody>

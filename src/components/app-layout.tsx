@@ -33,7 +33,7 @@ function checkForUpdateAtStartup() {
 export function AppLayout({ children, activeTab = "dashboard", user }: AppLayoutProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [updating, setUpdating] = useState(false);
+  const [updateStage, setUpdateStage] = useState<"idle" | "preparing" | "started">("idle");
   const [release, setRelease] = useState<AvailableRelease | null>(null);
 
   useEffect(() => {
@@ -60,8 +60,9 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
   }, [navigate]);
 
   const handleUpdate = useCallback(async () => {
-    if (!release) return;
-    setUpdating(true);
+    if (!release || updateStage !== "idle") return;
+    setUpdateStage("preparing");
+    let updateStarted = false;
     try {
       const result = await startUpdate({
         data: { version: release.version },
@@ -70,13 +71,15 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
         toast.error(result.error);
         return;
       }
-      toast.success("Backup validado. A atualização será aplicada e o sistema será reiniciado.");
+      updateStarted = true;
+      setUpdateStage("started");
+      toast.success("Atualização iniciada. O sistema será reiniciado automaticamente ao concluir.");
     } catch (error) {
       toast.error(errorMessage(error, "Não foi possível preparar a atualização."));
     } finally {
-      setUpdating(false);
+      if (!updateStarted) setUpdateStage("idle");
     }
-  }, [release]);
+  }, [release, updateStage]);
 
   const navItems = [
     { id: "dashboard", label: "Painel", to: "/", icon: LayoutDashboard },
@@ -89,7 +92,7 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
       {release ? (
-        <UpdateNotice release={release} onUpdate={handleUpdate} updating={updating} />
+        <UpdateNotice release={release} onUpdate={handleUpdate} updateStage={updateStage} />
       ) : null}
       <SessionTimeout
         onWarning={() => toast.warning("Sua sessão será encerrada em 15 minutos por inatividade.")}

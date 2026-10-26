@@ -30,16 +30,20 @@ describe("lembretes de renovação anual", () => {
     });
   });
 
-  it("cria alertas graduais antes da renovação e identifica renovação vencida", () => {
+  it("avisa a renovação somente a partir do mesmo dia do mês anterior", () => {
     expect(getRenewalReminder({ monthlyBillingDate: "2024-12-25", today: "2026-09-26" }).kind).toBe(
-      "lembrete_90",
+      "em_dia",
     );
     expect(getRenewalReminder({ monthlyBillingDate: "2024-12-25", today: "2026-10-26" }).kind).toBe(
-      "lembrete_60",
+      "em_dia",
     );
-    expect(getRenewalReminder({ monthlyBillingDate: "2024-12-25", today: "2026-11-26" }).kind).toBe(
+    expect(getRenewalReminder({ monthlyBillingDate: "2024-12-25", today: "2026-11-25" }).kind).toBe(
       "lembrete_30",
     );
+    expect(getRenewalReminder({ monthlyBillingDate: "2024-01-01", today: "2026-12-01" })).toEqual({
+      kind: "lembrete_30",
+      referenceDate: "2027-01-01",
+    });
     expect(getRenewalReminder({ monthlyBillingDate: "2024-10-20", today: "2026-10-26" }).kind).toBe(
       "atrasada",
     );

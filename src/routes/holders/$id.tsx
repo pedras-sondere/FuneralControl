@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Users,
   FileText,
-  Receipt,
   UserCheck,
   AlertTriangle,
   PlusCircle,
@@ -35,7 +34,6 @@ import {
   recordPersonLifecycle,
   uploadContract,
   deleteContract,
-  payInvoice,
 } from "../../lib/api.functions";
 import { AppLayout } from "../../components/app-layout";
 import { Button } from "../../components/ui/button";
@@ -85,16 +83,6 @@ type ContractRecord = {
   uploaded_at: string;
 };
 
-type InvoiceRecord = {
-  id: number;
-  reference_month: string;
-  amount: number;
-  due_date: string;
-  status: string;
-  paid_at: string | null;
-  payment_method: string | null;
-};
-
 export const Route = createFileRoute("/holders/$id")({
   beforeLoad: async () => {
     const user = await getMe();
@@ -122,7 +110,7 @@ function HolderDetailsPage() {
   const { data, plans } = Route.useLoaderData();
   const router = useRouter();
 
-  const { holder, beneficiaries, contracts, invoices } = data;
+  const { holder, beneficiaries, contracts } = data;
   const events = data.events;
 
   // Edit Holder Modal State
@@ -175,16 +163,6 @@ function HolderDetailsPage() {
   // Upload Contract State
   const [uploadingContract, setUploadingContract] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  // Pay Invoice Modal State
-  const [payingInvoice, setPayingInvoice] = useState<{
-    id: number;
-    amount: number;
-    month: string;
-  } | null>(null);
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
-  const [payMethod, setPayMethod] = useState("PIX");
-  const [savingPayment, setSavingPayment] = useState(false);
 
   const formatCPF = (val: string) => {
     if (!val) return "-";
@@ -428,30 +406,6 @@ function HolderDetailsPage() {
     }
   };
 
-  // Handler: Pay Invoice
-  const handlePayInvoice = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payingInvoice) return;
-
-    setSavingPayment(true);
-    try {
-      await payInvoice({
-        data: {
-          id: payingInvoice.id,
-          paid_at: payDate,
-          payment_method: payMethod,
-        },
-      });
-      toast.success("Fatura baixada com sucesso!");
-      setPayingInvoice(null);
-      router.invalidate();
-    } catch (err: unknown) {
-      toast.error(errorMessage(err, "Erro ao registrar pagamento"));
-    } finally {
-      setSavingPayment(false);
-    }
-  };
-
   return (
     <AppLayout activeTab="holders" user={user}>
       <div className="space-y-6">
@@ -620,10 +574,6 @@ function HolderDetailsPage() {
             <TabsTrigger value="contracts" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Contrato Digitalizado ({contracts.length})
-            </TabsTrigger>
-            <TabsTrigger value="invoices" className="flex items-center gap-2">
-              <Receipt className="h-4 w-4" />
-              Histórico de Faturas ({invoices.length})
             </TabsTrigger>
             <TabsTrigger value="events" className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
@@ -881,115 +831,6 @@ function HolderDetailsPage() {
             </Card>
           </TabsContent>
 
-          {/* ABA 3: HISTÓRICO DE FATURAS */}
-          <TabsContent value="invoices" className="space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-lg font-bold">Mensalidades do Titular</CardTitle>
-                  <CardDescription>
-                    Histórico completo de faturas geradas, abertas e quitadas.
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {invoices.length === 0 ? (
-                  <div className="text-center py-12 px-4">
-                    <Receipt className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-700 mb-2" />
-                    <p className="font-medium text-slate-700 dark:text-slate-300">
-                      Nenhuma fatura registrada
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      As faturas são geradas mensalmente pelo módulo financeiro.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                        <tr>
-                          <th className="px-5 py-3">Mês Ref.</th>
-                          <th className="px-5 py-3">Vencimento</th>
-                          <th className="px-5 py-3">Valor</th>
-                          <th className="px-5 py-3">Situação</th>
-                          <th className="px-5 py-3">Pagamento</th>
-                          <th className="px-5 py-3 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {invoices.map((inv: InvoiceRecord) => (
-                          <tr
-                            key={inv.id}
-                            className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50"
-                          >
-                            <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                              {inv.reference_month}
-                            </td>
-                            <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
-                              {formatDate(inv.due_date)}
-                            </td>
-                            <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
-                              {formatCurrency(inv.amount)}
-                            </td>
-                            <td className="px-5 py-3.5">
-                              {inv.status === "paga" && (
-                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-none">
-                                  Paga
-                                </Badge>
-                              )}
-                              {inv.status === "vencida" && (
-                                <Badge
-                                  variant="destructive"
-                                  className="bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-none"
-                                >
-                                  Vencida
-                                </Badge>
-                              )}
-                              {inv.status === "aberta" && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-blue-700 bg-blue-50 border-blue-200"
-                                >
-                                  Aberta
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="px-5 py-3.5 text-xs text-slate-500">
-                              {inv.paid_at ? (
-                                <span>
-                                  {formatDate(inv.paid_at)} ({inv.payment_method || "Outro"})
-                                </span>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                            <td className="px-5 py-3.5 text-right">
-                              {inv.status !== "paga" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    setPayingInvoice({
-                                      id: inv.id,
-                                      amount: inv.amount,
-                                      month: inv.reference_month,
-                                    })
-                                  }
-                                  className="h-8 text-xs text-teal-700 border-teal-200 hover:bg-teal-50 cursor-pointer"
-                                >
-                                  Dar Baixa
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
 
@@ -1426,60 +1267,6 @@ function HolderDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Baixa de Pagamento de Fatura */}
-      <Dialog open={!!payingInvoice} onOpenChange={(open) => !open && setPayingInvoice(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Registrar Pagamento</DialogTitle>
-            <DialogDescription>
-              Fatura de {payingInvoice?.month} no valor de{" "}
-              {formatCurrency(payingInvoice?.amount || 0)}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handlePayInvoice} className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Data do Pagamento *</Label>
-              <Input
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Forma de Pagamento *</Label>
-              <Select value={payMethod} onValueChange={setPayMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PIX">PIX</SelectItem>
-                  <SelectItem value="Boleto">Boleto Bancário</SelectItem>
-                  <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
-                  <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
-                  <SelectItem value="Transferência">Transferência Bancária</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setPayingInvoice(null)}>
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={savingPayment}
-              >
-                {savingPayment ? "Processando..." : "Confirmar Recebimento"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }

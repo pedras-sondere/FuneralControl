@@ -5,7 +5,6 @@ import { isValidCpf, normalizeCpf } from "./cpf";
 import { canAddBeneficiary, canUsePlanForHolder } from "./business-rules";
 import { errorCode, errorMessage } from "./error-message";
 import { canAssumeCurrentHolder, getRenewalReminder, isLifecycleStatus } from "./lifecycle-rules";
-
 const auth = async () => (await import("./auth.server")).requireMutableUser();
 const sql = async () => (await import("./db.server")).q;
 const assertMutable = async () => (await import("./backup-guard.server")).requireMutableOperation();
@@ -271,7 +270,9 @@ export const startUpdate = createServerFn({ method: "POST" })
       { detached: true, stdio: "ignore", windowsHide: true },
     );
     updateProcess.unref();
-    setTimeout(() => process.exit(0), 2_000).unref();
+    // Mantém o servidor vivo tempo suficiente para o navegador receber e exibir o estado
+    // da atualização antes de o atualizador elevado encerrar a versão em uso.
+    setTimeout(() => process.exit(0), 5_000).unref();
     return { ok: true as const };
   });
 
@@ -353,10 +354,8 @@ export const runExternalBackup = createServerFn({ method: "POST" }).handler(asyn
 });
 
 // ---------- Shared SQL ----------
-const INVOICE_STATUS = `CASE WHEN i.status = 'aberta' AND i.due_date < current_date THEN 'vencida' ELSE i.status END`;
 const HOLDER_STATUS = `CASE WHEN h.status = 'falecido' THEN 'falecido'
   WHEN h.status = 'cancelado' THEN 'cancelado'
-  WHEN EXISTS (SELECT 1 FROM invoices x WHERE x.holder_id = h.id AND x.status = 'aberta' AND x.due_date < current_date) THEN 'inadimplente'
   ELSE 'ativo' END`;
 
 export type Plan = {
@@ -372,17 +371,12 @@ export type Plan = {
 export const getDashboard = createServerFn({ method: "GET" }).handler(async () => {
   await auth();
   const q = await sql();
-  const [s] = await q(`SELECT
-    (SELECT count(*)::int FROM holders WHERE status <> 'cancelado') AS active_holders,
-    (SELECT count(*)::int FROM invoices WHERE status = 'aberta' AND due_date >= current_date) AS open_invoices,
-    (SELECT count(*)::int FROM invoices WHERE status = 'aberta' AND due_date < current_date) AS overdue_invoices,
-    (SELECT coalesce(sum(amount),0)::float FROM invoices WHERE status = 'paga' AND date_trunc('month', paid_at) = date_trunc('month', current_date)) AS received_month`);
-  const upcoming =
-    await q(`SELECT i.id, h.id AS holder_id, h.name AS holder_name, i.amount::float AS amount,
-      i.due_date::text AS due_date, ${INVOICE_STATUS} AS status
-    FROM invoices i JOIN holders h ON h.id = i.holder_id
-    WHERE i.status = 'aberta' ORDER BY i.due_date LIMIT 8`);
-  return { stats: s, upcoming };
+  const [stats] = await q(`SELECT
+    (SELECT count(*)::int FROM holders WHERE status = 'ativo') AS active_holders,
+    (SELECT count(*)::int FROM holders WHERE status = 'falecido') AS deceased_holders,
+    (SELECT count(*)::int FROM holders WHERE status = 'cancelado') AS cancelled_holders,
+    (SELECT count(*)::int FROM plans WHERE active = true) AS active_plans`);
+  return { stats };
 });
 
 // ---------- Plans ----------
@@ -572,12 +566,6 @@ export const getHolder = createServerFn({ method: "GET" })
       FROM contracts WHERE holder_id = $1 ORDER BY uploaded_at DESC`,
       [data.id],
     );
-    const invoices = await q(
-      `SELECT i.id, i.reference_month, i.amount::float AS amount, i.due_date::text AS due_date,
-        ${INVOICE_STATUS} AS status, i.paid_at::text AS paid_at, i.payment_method
-      FROM invoices i WHERE i.holder_id = $1 ORDER BY i.due_date DESC`,
-      [data.id],
-    );
     const events = await q(
       `SELECT e.id, e.event_type, e.occurred_on::text AS occurred_on, e.description,
         b.name AS beneficiary_name, u.name AS created_by_name, e.created_at::text AS created_at
@@ -588,7 +576,7 @@ export const getHolder = createServerFn({ method: "GET" })
       ORDER BY e.occurred_on DESC, e.id DESC`,
       [data.id],
     );
-    return { holder, beneficiaries, contracts, invoices, events };
+    return { holder, beneficiaries, contracts, events };
   });
 
 // ---------- Beneficiaries ----------
@@ -965,81 +953,5 @@ export const deleteContract = createServerFn({ method: "POST" })
     const { removeFile } = await import("./storage.server");
     const r = await q("DELETE FROM contracts WHERE id = $1 RETURNING stored_name", [data.id]);
     if (r[0]) await removeFile(r[0].stored_name);
-    return { ok: true };
-  });
-
-// ---------- Invoices ----------
-export const listInvoices = createServerFn({ method: "GET" })
-  .validator((d: unknown) =>
-    z.object({ status: z.string().optional(), month: z.string().optional() }).parse(d ?? {}),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    const q = await sql();
-    return q<{
-      id: number;
-      holder_id: number;
-      holder_name: string;
-      reference_month: string;
-      amount: number;
-      due_date: string;
-      status: string;
-      paid_at: string | null;
-      payment_method: string | null;
-    }>(
-      `SELECT * FROM (SELECT i.id, h.id AS holder_id, h.name AS holder_name, i.reference_month, i.amount::float AS amount,
-        i.due_date::text AS due_date, ${INVOICE_STATUS} AS status, i.paid_at::text AS paid_at, i.payment_method
-       FROM invoices i JOIN holders h ON h.id = i.holder_id) t
-       WHERE ($1::text IS NULL OR t.status = $1) AND ($2::text IS NULL OR t.reference_month = $2)
-       ORDER BY t.due_date DESC, t.holder_name`,
-      [data.status && data.status !== "todas" ? data.status : null, data.month || null],
-    );
-  });
-
-export const generateInvoices = createServerFn({ method: "POST" })
-  .validator((d: unknown) => z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(d))
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    const r = await q(
-      `INSERT INTO invoices (holder_id, reference_month, amount, due_date)
-      SELECT h.id, $1, p.monthly_price, ($1 || '-01')::date + (h.due_day - 1)
-      FROM holders h JOIN plans p ON p.id = h.plan_id
-      WHERE h.status <> 'cancelado' AND h.join_date <= (($1 || '-01')::date + interval '1 month' - interval '1 day')
-      ON CONFLICT (holder_id, reference_month) DO NOTHING RETURNING id`,
-      [data.month],
-    );
-    return { created: r.length };
-  });
-
-export const payInvoice = createServerFn({ method: "POST" })
-  .validator((d: unknown) =>
-    z.object({ id: z.number(), paid_at: z.string(), payment_method: z.string().min(1) }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    await q(`UPDATE invoices SET status='paga', paid_at=$1, payment_method=$2 WHERE id=$3`, [
-      data.paid_at,
-      data.payment_method,
-      data.id,
-    ]);
-    return { ok: true };
-  });
-
-export const setInvoiceStatus = createServerFn({ method: "POST" })
-  .validator((d: unknown) =>
-    z.object({ id: z.number(), status: z.enum(["aberta", "cancelada"]) }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    await q(`UPDATE invoices SET status=$1, paid_at=NULL, payment_method=NULL WHERE id=$2`, [
-      data.status,
-      data.id,
-    ]);
     return { ok: true };
   });

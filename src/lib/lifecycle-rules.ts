@@ -14,7 +14,7 @@ export function canAssumeCurrentHolder(
 }
 
 export type RenewalReminderKind =
-  "sem_data" | "em_dia" | "lembrete_90" | "lembrete_60" | "lembrete_30" | "atrasada";
+  "sem_data" | "em_dia" | "lembrete_30" | "atrasada";
 
 export type RenewalReminder = {
   kind: RenewalReminderKind;
@@ -37,12 +37,12 @@ function annualReference(billingDate: string, year: number): string {
   return dateToIso(year, month, Math.min(day, lastDay));
 }
 
-function daysBetween(from: string, to: string): number {
-  const start = parseIsoDate(from);
-  const end = parseIsoDate(to);
-  const startUtc = Date.UTC(start.year, start.month - 1, start.day);
-  const endUtc = Date.UTC(end.year, end.month - 1, end.day);
-  return Math.round((endUtc - startUtc) / 86_400_000);
+function previousMonthDate(value: string): string {
+  const { year, month, day } = parseIsoDate(value);
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previousYear = month === 1 ? year - 1 : year;
+  const lastDay = new Date(Date.UTC(previousYear, previousMonth, 0)).getUTCDate();
+  return dateToIso(previousYear, previousMonth, Math.min(day, lastDay));
 }
 
 export function getRenewalReminder({
@@ -63,10 +63,7 @@ export function getRenewalReminder({
     referenceDate = annualReference(monthlyBillingDate, currentYear + 1);
   }
 
-  const daysUntil = daysBetween(today, referenceDate);
-  if (daysUntil < 0) return { kind: "atrasada", referenceDate };
-  if (daysUntil <= 30) return { kind: "lembrete_30", referenceDate };
-  if (daysUntil <= 60) return { kind: "lembrete_60", referenceDate };
-  if (daysUntil <= 90) return { kind: "lembrete_90", referenceDate };
+  if (today > referenceDate) return { kind: "atrasada", referenceDate };
+  if (today >= previousMonthDate(referenceDate)) return { kind: "lembrete_30", referenceDate };
   return { kind: "em_dia", referenceDate };
 }
