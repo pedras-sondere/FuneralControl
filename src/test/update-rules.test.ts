@@ -52,4 +52,22 @@ describe("regras de atualização", () => {
       }),
     ).toBeNull();
   });
+
+  it("recusa pacote cujo nome ou endereço não corresponde à release estável", () => {
+    expect(
+      parseAvailableRelease({
+        tag_name: "v2.0.2",
+        prerelease: false,
+        body: `SHA256: ${"b".repeat(64)}`,
+        assets: [
+          {
+            name: "FuneralControl-runtime-2.0.1.zip",
+            browser_download_url:
+              "https://github.com/pedras-sondere/FuneralControl/releases/download/v2.0.2/FuneralControl-runtime-2.0.1.zip",
+            size: 1234,
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
 });

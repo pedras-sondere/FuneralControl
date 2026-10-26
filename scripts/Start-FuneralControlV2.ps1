@@ -70,6 +70,7 @@ $environment = [ordered]@{
   FUNERALCONTROL_APP_VERSION = [string]$state.appVersion
   FUNERALCONTROL_INSTALL_ROOT = $InstallRoot
   FUNERALCONTROL_DATA_ROOT = $DataRoot
+  UPLOAD_DIR = $paths.UploadRoot
   FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION = if ($state.phase -eq 'databaseConfigured') { 'true' } else { 'false' }
 }
 $originalEnvironment = @{}
