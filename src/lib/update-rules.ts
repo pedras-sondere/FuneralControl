@@ -3,6 +3,7 @@ export type AvailableRelease = {
   notes: string;
   packageUrl: string;
   sha256: string;
+  size: number;
 };
 
 type GitHubRelease = {
@@ -35,16 +36,22 @@ export function parseAvailableRelease(release: GitHubRelease): AvailableRelease 
   if (!versionParts(version) || typeof release.body !== "string" || !Array.isArray(release.assets))
     return null;
 
+  const expectedAssetName = `FuneralControl-runtime-${version}.zip`;
+  const expectedAssetUrl = `https://github.com/pedras-sondere/FuneralControl/releases/download/v${version}/${expectedAssetName}`;
   const packageAsset = release.assets.find(
-    (asset): asset is { name: string; browser_download_url: string } =>
+    (asset): asset is { name: string; browser_download_url: string; size: number } =>
       typeof asset === "object" &&
       asset !== null &&
       "name" in asset &&
       "browser_download_url" in asset &&
+      "size" in asset &&
       typeof asset.name === "string" &&
       typeof asset.browser_download_url === "string" &&
-      asset.name === "FuneralControl-update.zip" &&
-      asset.browser_download_url.startsWith("https://github.com/pedras-sondere/FuneralControl/"),
+      typeof asset.size === "number" &&
+      Number.isSafeInteger(asset.size) &&
+      asset.size > 0 &&
+      asset.name === expectedAssetName &&
+      asset.browser_download_url === expectedAssetUrl,
   );
   const hash = release.body.match(/SHA256:\s*([a-fA-F0-9]{64})/)?.[1]?.toLowerCase();
   if (!packageAsset || !hash) return null;
@@ -54,5 +61,6 @@ export function parseAvailableRelease(release: GitHubRelease): AvailableRelease 
     notes: release.body,
     packageUrl: packageAsset.browser_download_url,
     sha256: hash,
+    size: packageAsset.size,
   };
 }

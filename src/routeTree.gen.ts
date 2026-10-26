@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BackupsRouteImport } from './routes/backups'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as HoldersIndexRouteImport } from './routes/holders/index'
 import { Route as HoldersIdRouteImport } from './routes/holders/$id'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices/index'
@@ -28,9 +30,19 @@ const BackupsRoute = BackupsRouteImport.update({
   path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HoldersIndexRoute = HoldersIndexRouteImport.update({
@@ -62,7 +74,9 @@ const ApiContractsIdRoute = ApiContractsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backups': typeof BackupsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders/': typeof HoldersIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -72,7 +86,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backups': typeof BackupsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders': typeof HoldersIndexRoute
   '/invoices': typeof InvoicesIndexRoute
@@ -83,7 +99,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/backups': typeof BackupsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/holders/$id': typeof HoldersIdRoute
   '/holders/': typeof HoldersIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -95,7 +113,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/backups'
+    | '/change-password'
     | '/login'
+    | '/api/health'
     | '/holders/$id'
     | '/holders/'
     | '/invoices/'
@@ -105,7 +125,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/backups'
+    | '/change-password'
     | '/login'
+    | '/api/health'
     | '/holders/$id'
     | '/holders'
     | '/invoices'
@@ -115,7 +137,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/backups'
+    | '/change-password'
     | '/login'
+    | '/api/health'
     | '/holders/$id'
     | '/holders/'
     | '/invoices/'
@@ -126,7 +150,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackupsRoute: typeof BackupsRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   LoginRoute: typeof LoginRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   HoldersIdRoute: typeof HoldersIdRoute
   HoldersIndexRoute: typeof HoldersIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
@@ -150,11 +176,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/holders/': {
@@ -198,7 +238,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackupsRoute: BackupsRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   LoginRoute: LoginRoute,
+  ApiHealthRoute: ApiHealthRoute,
   HoldersIdRoute: HoldersIdRoute,
   HoldersIndexRoute: HoldersIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,

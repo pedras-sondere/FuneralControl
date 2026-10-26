@@ -150,12 +150,27 @@ export async function createBackupWithDatabaseDump({
 export async function createPostgresDump(
   outputPath: string,
   databaseUrl = process.env["DATABASE_URL"],
+  execute: (file: string, args: string[], options: { windowsHide: boolean }) => Promise<unknown> =
+    execFileAsync,
 ) {
   if (!databaseUrl)
     throw new Error("DATABASE_URL é obrigatória para gerar o backup do PostgreSQL.");
-  await execFileAsync("pg_dump", ["--format=plain", `--file=${outputPath}`, databaseUrl], {
-    windowsHide: true,
-  });
+  const installRoot = process.env["FUNERALCONTROL_INSTALL_ROOT"];
+  const pgDump = installRoot
+    ? path.join(installRoot, "runtime", "postgresql", "bin", "pg_dump.exe")
+    : "pg_dump";
+  try {
+    await execute(pgDump, ["--format=plain", `--file=${outputPath}`, databaseUrl], {
+      windowsHide: true,
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(
+        "Não foi possível localizar o utilitário de backup do PostgreSQL. Verifique a instalação do FuneralControl.",
+      );
+    }
+    throw new Error("Não foi possível gerar o backup do banco de dados PostgreSQL.");
+  }
 }
 
 export async function runBackup({
