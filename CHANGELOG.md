@@ -15,3 +15,4 @@
 ### Corrigido
 
 - O aviso de atualização bloqueia o uso da tela enquanto a atualização local é aplicada e reabre o sistema automaticamente ao concluir ou restaurar a versão anterior.
+- Atualizadas as dependências de execução e de compilação para corrigir vulnerabilidades conhecidas antes da publicação.
