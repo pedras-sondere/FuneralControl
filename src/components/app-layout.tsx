@@ -14,7 +14,7 @@ import { checkForUpdate, logoutWithBackup, startUpdate } from "../lib/api.functi
 import type { AvailableRelease } from "../lib/update-rules";
 import { errorMessage } from "../lib/error-message";
 import { Button } from "./ui/button";
-import { UpdateNotice } from "./update-notice";
+import { UpdateNotice, UpdateProgressOverlay, type UpdateStage } from "./update-notice";
 import { SessionTimeout } from "./session-timeout";
 
 interface AppLayoutProps {
@@ -33,7 +33,7 @@ function checkForUpdateAtStartup() {
 export function AppLayout({ children, activeTab = "dashboard", user }: AppLayoutProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [updateStage, setUpdateStage] = useState<"idle" | "preparing" | "started">("idle");
+  const [updateStage, setUpdateStage] = useState<UpdateStage>("idle");
   const [release, setRelease] = useState<AvailableRelease | null>(null);
 
   useEffect(() => {
@@ -41,6 +41,40 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
       .then(setRelease)
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (updateStage !== "started" || !release) return;
+
+    let disposed = false;
+    let intervalId: ReturnType<typeof window.setInterval> | undefined;
+
+    const reloadWhenNewVersionIsReady = async () => {
+      try {
+        const response = await fetch(`/api/health?update-check=${Date.now()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+
+        const health = (await response.json()) as { ok?: boolean; version?: string };
+        if (!disposed && health.ok && health.version === release.version) {
+          window.location.reload();
+        }
+      } catch {
+        // Durante a troca do runtime é esperado que a página antiga não consiga acessar o servidor.
+      }
+    };
+
+    const firstCheckId = window.setTimeout(() => {
+      void reloadWhenNewVersionIsReady();
+      intervalId = window.setInterval(() => void reloadWhenNewVersionIsReady(), 2_000);
+    }, 5_000);
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(firstCheckId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
+  }, [release, updateStage]);
 
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
@@ -91,6 +125,9 @@ export function AppLayout({ children, activeTab = "dashboard", user }: AppLayout
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+      {release && updateStage !== "idle" ? (
+        <UpdateProgressOverlay version={release.version} updateStage={updateStage} />
+      ) : null}
       {release ? (
         <UpdateNotice release={release} onUpdate={handleUpdate} updateStage={updateStage} />
       ) : null}
