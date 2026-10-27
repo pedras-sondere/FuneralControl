@@ -2,9 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { detectAllowedFileType } from "./file-signature";
 import { isValidCpf, normalizeCpf } from "./cpf";
-import { canAddBeneficiary } from "./business-rules";
+import { canAddBeneficiary, canUsePlanForHolder } from "./business-rules";
 import { errorCode, errorMessage } from "./error-message";
-
+import { canAssumeCurrentHolder, getRenewalReminder, isLifecycleStatus } from "./lifecycle-rules";
 const auth = async () => (await import("./auth.server")).requireMutableUser();
 const sql = async () => (await import("./db.server")).q;
 const assertMutable = async () => (await import("./backup-guard.server")).requireMutableOperation();
@@ -270,7 +270,9 @@ export const startUpdate = createServerFn({ method: "POST" })
       { detached: true, stdio: "ignore", windowsHide: true },
     );
     updateProcess.unref();
-    setTimeout(() => process.exit(0), 2_000).unref();
+    // Mantém o servidor vivo tempo suficiente para o navegador receber e exibir o estado
+    // da atualização antes de o atualizador elevado encerrar a versão em uso.
+    setTimeout(() => process.exit(0), 5_000).unref();
     return { ok: true as const };
   });
 
@@ -352,9 +354,8 @@ export const runExternalBackup = createServerFn({ method: "POST" }).handler(asyn
 });
 
 // ---------- Shared SQL ----------
-const INVOICE_STATUS = `CASE WHEN i.status = 'aberta' AND i.due_date < current_date THEN 'vencida' ELSE i.status END`;
-const HOLDER_STATUS = `CASE WHEN h.status = 'cancelado' THEN 'cancelado'
-  WHEN EXISTS (SELECT 1 FROM invoices x WHERE x.holder_id = h.id AND x.status = 'aberta' AND x.due_date < current_date) THEN 'inadimplente'
+const HOLDER_STATUS = `CASE WHEN h.status = 'falecido' THEN 'falecido'
+  WHEN h.status = 'cancelado' THEN 'cancelado'
   ELSE 'ativo' END`;
 
 export type Plan = {
@@ -370,17 +371,12 @@ export type Plan = {
 export const getDashboard = createServerFn({ method: "GET" }).handler(async () => {
   await auth();
   const q = await sql();
-  const [s] = await q(`SELECT
-    (SELECT count(*)::int FROM holders WHERE status <> 'cancelado') AS active_holders,
-    (SELECT count(*)::int FROM invoices WHERE status = 'aberta' AND due_date >= current_date) AS open_invoices,
-    (SELECT count(*)::int FROM invoices WHERE status = 'aberta' AND due_date < current_date) AS overdue_invoices,
-    (SELECT coalesce(sum(amount),0)::float FROM invoices WHERE status = 'paga' AND date_trunc('month', paid_at) = date_trunc('month', current_date)) AS received_month`);
-  const upcoming =
-    await q(`SELECT i.id, h.id AS holder_id, h.name AS holder_name, i.amount::float AS amount,
-      i.due_date::text AS due_date, ${INVOICE_STATUS} AS status
-    FROM invoices i JOIN holders h ON h.id = i.holder_id
-    WHERE i.status = 'aberta' ORDER BY i.due_date LIMIT 8`);
-  return { stats: s, upcoming };
+  const [stats] = await q(`SELECT
+    (SELECT count(*)::int FROM holders WHERE status = 'ativo') AS active_holders,
+    (SELECT count(*)::int FROM holders WHERE status = 'falecido') AS deceased_holders,
+    (SELECT count(*)::int FROM holders WHERE status = 'cancelado') AS cancelled_holders,
+    (SELECT count(*)::int FROM plans WHERE active = true) AS active_plans`);
+  return { stats };
 });
 
 // ---------- Plans ----------
@@ -441,10 +437,18 @@ export const listHolders = createServerFn({ method: "GET" })
     const q = await sql();
     const rows = await q(
       `SELECT * FROM (SELECT h.id, h.name, h.cpf, h.phone, h.due_day, p.name AS plan_name,
+        current_beneficiary.name AS current_holder_name,
         ${HOLDER_STATUS} AS status,
-        (SELECT count(*)::int FROM beneficiaries b WHERE b.holder_id = h.id) AS beneficiaries
-      FROM holders h JOIN plans p ON p.id = h.plan_id) t
-      WHERE ($1::text IS NULL OR t.name ILIKE '%' || $1 || '%' OR regexp_replace(t.cpf, '\\D', '', 'g') LIKE '%' || regexp_replace($1, '\\D', '', 'g') || '%')
+        (SELECT count(*)::int FROM beneficiaries b WHERE b.holder_id = h.id AND b.status = 'ativo') AS beneficiaries
+      FROM holders h
+      JOIN plans p ON p.id = h.plan_id
+      LEFT JOIN beneficiaries current_beneficiary ON current_beneficiary.id = h.current_holder_beneficiary_id) t
+      WHERE ($1::text IS NULL OR t.name ILIKE '%' || $1 || '%' OR regexp_replace(t.cpf, '\\D', '', 'g') LIKE '%' || regexp_replace($1, '\\D', '', 'g') || '%'
+        OR EXISTS (
+          SELECT 1 FROM beneficiaries b
+          WHERE b.holder_id = t.id
+            AND (b.name ILIKE '%' || $1 || '%' OR regexp_replace(coalesce(b.cpf, ''), '\\D', '', 'g') LIKE '%' || regexp_replace($1, '\\D', '', 'g') || '%')
+        ))
         AND ($2::text IS NULL OR t.status = $2)
       ORDER BY t.name`,
       [data.search?.trim() || null, data.status && data.status !== "todos" ? data.status : null],
@@ -456,6 +460,7 @@ export const listHolders = createServerFn({ method: "GET" })
       phone: string | null;
       due_day: number;
       plan_name: string;
+      current_holder_name: string | null;
       status: string;
       beneficiaries: number;
     }>;
@@ -472,7 +477,8 @@ const holderSchema = z.object({
   plan_id: z.number(),
   due_day: z.number().int().min(1).max(28),
   join_date: z.string(),
-  status: z.enum(["ativo", "cancelado"]),
+  monthly_billing_date: z.string().nullable().optional(),
+  status: z.enum(["ativo", "falecido", "cancelado"]),
 });
 
 export const saveHolder = createServerFn({ method: "POST" })
@@ -481,6 +487,18 @@ export const saveHolder = createServerFn({ method: "POST" })
     await auth();
     await assertMutable();
     const q = await sql();
+    const [plan] = await q<{ active: boolean }>("SELECT active FROM plans WHERE id = $1", [
+      data.plan_id,
+    ]);
+    const [existing] = data.id
+      ? await q<{ plan_id: number }>("SELECT plan_id FROM holders WHERE id = $1", [data.id])
+      : [undefined];
+    if (!canUsePlanForHolder(plan) && (!data.id || existing?.plan_id !== data.plan_id)) {
+      return {
+        ok: false as const,
+        error: "Não é possível atribuir um plano inativo a um titular.",
+      };
+    }
     const v = [
       data.name,
       data.cpf,
@@ -491,20 +509,22 @@ export const saveHolder = createServerFn({ method: "POST" })
       data.plan_id,
       data.due_day,
       data.join_date,
+      data.monthly_billing_date || null,
       data.status,
     ];
     try {
       if (data.id) {
         await q(
           `UPDATE holders SET name=$1, cpf=$2, birth_date=$3, phone=$4, email=$5, address=$6,
-          plan_id=$7, due_day=$8, join_date=$9, status=$10 WHERE id=$11`,
+          plan_id=$7, due_day=$8, join_date=$9, monthly_billing_date=$10, status=$11,
+          status_changed_at = CASE WHEN status IS DISTINCT FROM $11 THEN current_date ELSE status_changed_at END WHERE id=$12`,
           [...v, data.id],
         );
         return { ok: true as const, id: data.id };
       }
       const r = await q(
-        `INSERT INTO holders (name, cpf, birth_date, phone, email, address, plan_id, due_day, join_date, status)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        `INSERT INTO holders (name, cpf, birth_date, phone, email, address, plan_id, due_day, join_date, monthly_billing_date, status)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         v,
       );
       return { ok: true as const, id: r[0].id as number };
@@ -522,29 +542,41 @@ export const getHolder = createServerFn({ method: "GET" })
     const q = await sql();
     const [holder] = await q(
       `SELECT h.id, h.name, h.cpf, h.birth_date::text AS birth_date, h.phone, h.email, h.address,
-        h.plan_id, h.due_day, h.join_date::text AS join_date, h.status AS base_status, ${HOLDER_STATUS} AS status,
+        h.plan_id, h.due_day, h.join_date::text AS join_date, h.monthly_billing_date::text AS monthly_billing_date,
+        h.status AS base_status, h.status_changed_at::text AS status_changed_at, h.current_holder_beneficiary_id,
+        ${HOLDER_STATUS} AS status,
+        current_beneficiary.name AS current_holder_name,
         p.name AS plan_name, p.monthly_price::float AS monthly_price, p.max_beneficiaries
-      FROM holders h JOIN plans p ON p.id = h.plan_id WHERE h.id = $1`,
+      FROM holders h
+      JOIN plans p ON p.id = h.plan_id
+      LEFT JOIN beneficiaries current_beneficiary ON current_beneficiary.id = h.current_holder_beneficiary_id
+      WHERE h.id = $1`,
       [data.id],
     );
     if (!holder) return null;
     const beneficiaries = await q(
-      `SELECT id, name, cpf, birth_date::text AS birth_date, relationship
+      `SELECT id, name, cpf, birth_date::text AS birth_date, relationship, status,
+        status_changed_at::text AS status_changed_at,
+        (id = $2) AS is_current_holder
       FROM beneficiaries WHERE holder_id = $1 ORDER BY name`,
-      [data.id],
+      [data.id, holder.current_holder_beneficiary_id],
     );
     const contracts = await q(
       `SELECT id, file_name, mime_type, size_bytes, uploaded_at::text AS uploaded_at
       FROM contracts WHERE holder_id = $1 ORDER BY uploaded_at DESC`,
       [data.id],
     );
-    const invoices = await q(
-      `SELECT i.id, i.reference_month, i.amount::float AS amount, i.due_date::text AS due_date,
-        ${INVOICE_STATUS} AS status, i.paid_at::text AS paid_at, i.payment_method
-      FROM invoices i WHERE i.holder_id = $1 ORDER BY i.due_date DESC`,
+    const events = await q(
+      `SELECT e.id, e.event_type, e.occurred_on::text AS occurred_on, e.description,
+        b.name AS beneficiary_name, u.name AS created_by_name, e.created_at::text AS created_at
+      FROM family_events e
+      LEFT JOIN beneficiaries b ON b.id = e.beneficiary_id
+      LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.holder_id = $1
+      ORDER BY e.occurred_on DESC, e.id DESC`,
       [data.id],
     );
-    return { holder, beneficiaries, contracts, invoices };
+    return { holder, beneficiaries, contracts, events };
   });
 
 // ---------- Beneficiaries ----------
@@ -579,7 +611,7 @@ export const saveBeneficiary = createServerFn({ method: "POST" })
     }
     const [lim] = await q(
       `SELECT p.max_beneficiaries AS max,
-      (SELECT count(*)::int FROM beneficiaries WHERE holder_id = h.id) AS n
+      (SELECT count(*)::int FROM beneficiaries WHERE holder_id = h.id AND status = 'ativo') AS n
       FROM holders h JOIN plans p ON p.id = h.plan_id WHERE h.id = $1`,
       [data.holder_id],
     );
@@ -596,11 +628,292 @@ export const saveBeneficiary = createServerFn({ method: "POST" })
 export const deleteBeneficiary = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.number() }).parse(d))
   .handler(async ({ data }) => {
-    await auth();
+    const user = await auth();
     await assertMutable();
     const q = await sql();
-    await q("DELETE FROM beneficiaries WHERE id = $1", [data.id]);
-    return { ok: true };
+    const [beneficiary] = await q<{ holder_id: number; name: string }>(
+      "SELECT holder_id, name FROM beneficiaries WHERE id = $1",
+      [data.id],
+    );
+    if (!beneficiary) return { ok: false as const, error: "Beneficiário não encontrado." };
+    await q(
+      "UPDATE beneficiaries SET status = 'cancelado', status_changed_at = current_date WHERE id = $1",
+      [data.id],
+    );
+    await q(
+      `INSERT INTO family_events (holder_id, beneficiary_id, event_type, occurred_on, description, created_by)
+      VALUES ($1,$2,'cancelamento',current_date,$3,$4)`,
+      [
+        beneficiary.holder_id,
+        data.id,
+        `Beneficiário ${beneficiary.name} marcado como cancelado.`,
+        user.id,
+      ],
+    );
+    return { ok: true as const };
+  });
+
+const occurrenceSchema = z.object({
+  holder_id: z.number(),
+  beneficiary_id: z.number().nullable().optional(),
+  event_type: z.enum([
+    "inadimplencia",
+    "cancelamento",
+    "falecimento",
+    "utilizacao",
+    "observacao",
+    "outro",
+  ]),
+  occurred_on: z.string().min(1),
+  description: z.string().trim().min(1),
+});
+
+export const recordFamilyOccurrence = createServerFn({ method: "POST" })
+  .validator((d: unknown) => occurrenceSchema.parse(d))
+  .handler(async ({ data }) => {
+    const user = await auth();
+    await assertMutable();
+    const q = await sql();
+    if (data.beneficiary_id) {
+      const [beneficiary] = await q<{ id: number }>(
+        "SELECT id FROM beneficiaries WHERE id = $1 AND holder_id = $2",
+        [data.beneficiary_id, data.holder_id],
+      );
+      if (!beneficiary)
+        return { ok: false as const, error: "Beneficiário não pertence a esta família." };
+    }
+    await q(
+      `INSERT INTO family_events (holder_id, beneficiary_id, event_type, occurred_on, description, created_by)
+      VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        data.holder_id,
+        data.beneficiary_id || null,
+        data.event_type,
+        data.occurred_on,
+        data.description,
+        user.id,
+      ],
+    );
+    return { ok: true as const };
+  });
+
+const lifecycleSchema = z.object({
+  holder_id: z.number(),
+  subject: z.enum(["titular", "beneficiario"]),
+  beneficiary_id: z.number().nullable().optional(),
+  status: z.enum(["falecido", "cancelado"]),
+  occurred_on: z.string().min(1),
+  description: z.string().trim().optional(),
+  successor_beneficiary_id: z.number().nullable().optional(),
+});
+
+export const recordPersonLifecycle = createServerFn({ method: "POST" })
+  .validator((d: unknown) => lifecycleSchema.parse(d))
+  .handler(async ({ data }) => {
+    const user = await auth();
+    await assertMutable();
+    const q = await sql();
+    const [holder] = await q<{ status: string; current_holder_beneficiary_id: number | null }>(
+      "SELECT status, current_holder_beneficiary_id FROM holders WHERE id = $1",
+      [data.holder_id],
+    );
+    if (!holder) return { ok: false as const, error: "Cadastro familiar não encontrado." };
+
+    const personIsHolder = data.subject === "titular";
+    if (!personIsHolder && !data.beneficiary_id) {
+      return { ok: false as const, error: "Selecione o beneficiário." };
+    }
+
+    if (data.successor_beneficiary_id) {
+      if (data.status !== "falecido") {
+        return {
+          ok: false as const,
+          error: "A titularidade só pode ser transferida após um falecimento.",
+        };
+      }
+      const [successor] = await q<{ status: string }>(
+        "SELECT status FROM beneficiaries WHERE id = $1 AND holder_id = $2",
+        [data.successor_beneficiary_id, data.holder_id],
+      );
+      if (
+        !successor ||
+        !isLifecycleStatus(successor.status) ||
+        !canAssumeCurrentHolder("falecido", successor.status)
+      ) {
+        return {
+          ok: false as const,
+          error: "O titular atual deve ser um beneficiário ativo desta família.",
+        };
+      }
+    }
+
+    if (personIsHolder) {
+      await q("UPDATE holders SET status = $1, status_changed_at = $2 WHERE id = $3", [
+        data.status,
+        data.occurred_on,
+        data.holder_id,
+      ]);
+      if (data.successor_beneficiary_id) {
+        await q("UPDATE holders SET current_holder_beneficiary_id = $1 WHERE id = $2", [
+          data.successor_beneficiary_id,
+          data.holder_id,
+        ]);
+        await q(
+          `INSERT INTO holder_successions (holder_id, beneficiary_id, previous_beneficiary_id, occurred_on, created_by)
+          VALUES ($1,$2,$3,$4,$5)`,
+          [
+            data.holder_id,
+            data.successor_beneficiary_id,
+            holder.current_holder_beneficiary_id,
+            data.occurred_on,
+            user.id,
+          ],
+        );
+      }
+    } else {
+      const [beneficiary] = await q<{ id: number; name: string }>(
+        "SELECT id, name FROM beneficiaries WHERE id = $1 AND holder_id = $2",
+        [data.beneficiary_id, data.holder_id],
+      );
+      if (!beneficiary)
+        return { ok: false as const, error: "Beneficiário não pertence a esta família." };
+      await q("UPDATE beneficiaries SET status = $1, status_changed_at = $2 WHERE id = $3", [
+        data.status,
+        data.occurred_on,
+        data.beneficiary_id,
+      ]);
+    }
+
+    const subjectLabel = personIsHolder ? "Titular original" : "Beneficiário";
+    await q(
+      `INSERT INTO family_events (holder_id, beneficiary_id, event_type, occurred_on, description, created_by)
+      VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        data.holder_id,
+        personIsHolder ? null : data.beneficiary_id || null,
+        data.status === "falecido" ? "falecimento" : "cancelamento",
+        data.occurred_on,
+        data.description || `${subjectLabel} marcado como ${data.status}.`,
+        user.id,
+      ],
+    );
+    return { ok: true as const };
+  });
+
+// ---------- Gestão de renovações e utilização ----------
+export const getManagementOverview = createServerFn({ method: "GET" }).handler(async () => {
+  await auth();
+  const q = await sql();
+  const rows = await q<{
+    id: number;
+    name: string;
+    plan_name: string;
+    monthly_price: number;
+    base_status: string;
+    current_holder_name: string | null;
+    monthly_billing_date: string | null;
+    latest_completed_reference_date: string | null;
+    death_count: number;
+    utilization_count: number;
+  }>(
+    `SELECT h.id, h.name, h.status AS base_status, h.monthly_billing_date::text AS monthly_billing_date,
+      p.name AS plan_name, p.monthly_price::float AS monthly_price,
+      current_beneficiary.name AS current_holder_name,
+      (SELECT max(reference_date)::text FROM renewal_completions r WHERE r.holder_id = h.id) AS latest_completed_reference_date,
+      (SELECT count(*)::int FROM family_events e WHERE e.holder_id = h.id AND e.event_type = 'falecimento') AS death_count,
+      (SELECT count(*)::int FROM family_events e WHERE e.holder_id = h.id AND e.event_type = 'utilizacao') AS utilization_count
+    FROM holders h
+    JOIN plans p ON p.id = h.plan_id
+    LEFT JOIN beneficiaries current_beneficiary ON current_beneficiary.id = h.current_holder_beneficiary_id
+    ORDER BY h.name`,
+  );
+  const today = new Date().toISOString().slice(0, 10);
+  const families = rows.map((row) => ({
+    ...row,
+    renewal: getRenewalReminder({
+      monthlyBillingDate: row.monthly_billing_date,
+      latestCompletedReferenceDate: row.latest_completed_reference_date,
+      today,
+    }),
+  }));
+  const activeFamilies = families.filter(
+    (family) => family.base_status === "ativo" || Boolean(family.current_holder_name),
+  );
+  const monthlyRevenueEstimate = activeFamilies.reduce(
+    (total, family) => total + Number(family.monthly_price || 0),
+    0,
+  );
+  const deaths = families.reduce((total, family) => total + Number(family.death_count || 0), 0);
+  const utilizations = families.reduce(
+    (total, family) => total + Number(family.utilization_count || 0),
+    0,
+  );
+  const recentOccurrences = await q<{
+    id: number;
+    holder_id: number;
+    holder_name: string;
+    beneficiary_name: string | null;
+    event_type: string;
+    occurred_on: string;
+    description: string;
+  }>(
+    `SELECT e.id, e.holder_id, h.name AS holder_name, b.name AS beneficiary_name,
+      e.event_type, e.occurred_on::text AS occurred_on, e.description
+    FROM family_events e
+    JOIN holders h ON h.id = e.holder_id
+    LEFT JOIN beneficiaries b ON b.id = e.beneficiary_id
+    ORDER BY e.occurred_on DESC, e.id DESC
+    LIMIT 20`,
+  );
+  return {
+    families,
+    recentOccurrences,
+    indicators: {
+      activeFamilies: activeFamilies.length,
+      monthlyRevenueEstimate,
+      deaths,
+      utilizations,
+      utilizationRatio: activeFamilies.length ? utilizations / activeFamilies.length : 0,
+      revenuePerUtilization: utilizations ? monthlyRevenueEstimate / utilizations : null,
+    },
+  };
+});
+
+export const completeRenewal = createServerFn({ method: "POST" })
+  .validator((d: unknown) =>
+    z
+      .object({
+        holder_id: z.number(),
+        reference_date: z.string().min(1),
+        note: z.string().trim().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const user = await auth();
+    await assertMutable();
+    const q = await sql();
+    const [holder] = await q<{ id: number }>("SELECT id FROM holders WHERE id = $1", [
+      data.holder_id,
+    ]);
+    if (!holder) return { ok: false as const, error: "Cadastro familiar não encontrado." };
+    await q(
+      `INSERT INTO renewal_completions (holder_id, reference_date, completed_by, note)
+      VALUES ($1,$2,$3,$4)
+      ON CONFLICT (holder_id, reference_date)
+      DO UPDATE SET completed_by = EXCLUDED.completed_by, note = EXCLUDED.note, completed_at = now()`,
+      [data.holder_id, data.reference_date, user.id, data.note || ""],
+    );
+    await q(
+      `INSERT INTO family_events (holder_id, event_type, occurred_on, description, created_by)
+      VALUES ($1,'renovacao',current_date,$2,$3)`,
+      [
+        data.holder_id,
+        data.note || `Renovação anual concluída para a referência ${data.reference_date}.`,
+        user.id,
+      ],
+    );
+    return { ok: true as const };
   });
 
 // ---------- Contracts ----------
@@ -640,81 +953,5 @@ export const deleteContract = createServerFn({ method: "POST" })
     const { removeFile } = await import("./storage.server");
     const r = await q("DELETE FROM contracts WHERE id = $1 RETURNING stored_name", [data.id]);
     if (r[0]) await removeFile(r[0].stored_name);
-    return { ok: true };
-  });
-
-// ---------- Invoices ----------
-export const listInvoices = createServerFn({ method: "GET" })
-  .validator((d: unknown) =>
-    z.object({ status: z.string().optional(), month: z.string().optional() }).parse(d ?? {}),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    const q = await sql();
-    return q<{
-      id: number;
-      holder_id: number;
-      holder_name: string;
-      reference_month: string;
-      amount: number;
-      due_date: string;
-      status: string;
-      paid_at: string | null;
-      payment_method: string | null;
-    }>(
-      `SELECT * FROM (SELECT i.id, h.id AS holder_id, h.name AS holder_name, i.reference_month, i.amount::float AS amount,
-        i.due_date::text AS due_date, ${INVOICE_STATUS} AS status, i.paid_at::text AS paid_at, i.payment_method
-       FROM invoices i JOIN holders h ON h.id = i.holder_id) t
-       WHERE ($1::text IS NULL OR t.status = $1) AND ($2::text IS NULL OR t.reference_month = $2)
-       ORDER BY t.due_date DESC, t.holder_name`,
-      [data.status && data.status !== "todas" ? data.status : null, data.month || null],
-    );
-  });
-
-export const generateInvoices = createServerFn({ method: "POST" })
-  .validator((d: unknown) => z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(d))
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    const r = await q(
-      `INSERT INTO invoices (holder_id, reference_month, amount, due_date)
-      SELECT h.id, $1, p.monthly_price, ($1 || '-01')::date + (h.due_day - 1)
-      FROM holders h JOIN plans p ON p.id = h.plan_id
-      WHERE h.status <> 'cancelado' AND h.join_date <= (($1 || '-01')::date + interval '1 month' - interval '1 day')
-      ON CONFLICT (holder_id, reference_month) DO NOTHING RETURNING id`,
-      [data.month],
-    );
-    return { created: r.length };
-  });
-
-export const payInvoice = createServerFn({ method: "POST" })
-  .validator((d: unknown) =>
-    z.object({ id: z.number(), paid_at: z.string(), payment_method: z.string().min(1) }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    await q(`UPDATE invoices SET status='paga', paid_at=$1, payment_method=$2 WHERE id=$3`, [
-      data.paid_at,
-      data.payment_method,
-      data.id,
-    ]);
-    return { ok: true };
-  });
-
-export const setInvoiceStatus = createServerFn({ method: "POST" })
-  .validator((d: unknown) =>
-    z.object({ id: z.number(), status: z.enum(["aberta", "cancelada"]) }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    await auth();
-    await assertMutable();
-    const q = await sql();
-    await q(`UPDATE invoices SET status=$1, paid_at=NULL, payment_method=NULL WHERE id=$2`, [
-      data.status,
-      data.id,
-    ]);
     return { ok: true };
   });

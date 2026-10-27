@@ -40,7 +40,10 @@ CREATE TABLE IF NOT EXISTS holders (
   plan_id int NOT NULL REFERENCES plans(id),
   due_day int NOT NULL CHECK (due_day BETWEEN 1 AND 28),
   join_date date NOT NULL DEFAULT current_date,
-  status text NOT NULL DEFAULT 'ativo',
+  monthly_billing_date date,
+  status text NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'falecido', 'cancelado')),
+  status_changed_at date,
+  current_holder_beneficiary_id int,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS beneficiaries (
@@ -49,7 +52,10 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
   name text NOT NULL,
   cpf text,
   birth_date date,
-  relationship text NOT NULL
+  relationship text NOT NULL,
+  status text NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'falecido', 'cancelado')),
+  status_changed_at date,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS beneficiaries_cpf_unique
   ON beneficiaries (cpf) WHERE cpf IS NOT NULL;
@@ -62,17 +68,35 @@ CREATE TABLE IF NOT EXISTS contracts (
   size_bytes int NOT NULL,
   uploaded_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE IF NOT EXISTS invoices (
+CREATE TABLE IF NOT EXISTS family_events (
   id serial PRIMARY KEY,
   holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
-  reference_month text NOT NULL,
-  amount numeric(10,2) NOT NULL,
-  due_date date NOT NULL,
-  status text NOT NULL DEFAULT 'aberta',
-  paid_at date,
-  payment_method text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (holder_id, reference_month)
+  beneficiary_id int REFERENCES beneficiaries(id) ON DELETE SET NULL,
+  event_type text NOT NULL CHECK (event_type IN ('inadimplencia', 'cancelamento', 'falecimento', 'utilizacao', 'observacao', 'outro', 'renovacao')),
+  occurred_on date NOT NULL,
+  description text NOT NULL DEFAULT '',
+  created_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS family_events_holder_occurred_on_idx
+  ON family_events (holder_id, occurred_on DESC, id DESC);
+CREATE TABLE IF NOT EXISTS holder_successions (
+  id serial PRIMARY KEY,
+  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
+  beneficiary_id int NOT NULL REFERENCES beneficiaries(id) ON DELETE RESTRICT,
+  previous_beneficiary_id int REFERENCES beneficiaries(id) ON DELETE SET NULL,
+  occurred_on date NOT NULL,
+  created_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS renewal_completions (
+  id serial PRIMARY KEY,
+  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
+  reference_date date NOT NULL,
+  completed_by int REFERENCES users(id) ON DELETE SET NULL,
+  note text NOT NULL DEFAULT '',
+  completed_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (holder_id, reference_date)
 );
 CREATE TABLE IF NOT EXISTS backup_settings (
   id boolean PRIMARY KEY DEFAULT true CHECK (id),
@@ -100,6 +124,59 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `;
 
+const MANAGEMENT_SCHEMA = `
+ALTER TABLE holders ADD COLUMN IF NOT EXISTS monthly_billing_date date;
+ALTER TABLE holders ADD COLUMN IF NOT EXISTS status_changed_at date;
+ALTER TABLE holders ADD COLUMN IF NOT EXISTS current_holder_beneficiary_id int;
+ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'ativo';
+ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS status_changed_at date;
+ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS family_events (
+  id serial PRIMARY KEY,
+  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
+  beneficiary_id int REFERENCES beneficiaries(id) ON DELETE SET NULL,
+  event_type text NOT NULL CHECK (event_type IN ('inadimplencia', 'cancelamento', 'falecimento', 'utilizacao', 'observacao', 'outro', 'renovacao')),
+  occurred_on date NOT NULL,
+  description text NOT NULL DEFAULT '',
+  created_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS family_events_holder_occurred_on_idx
+  ON family_events (holder_id, occurred_on DESC, id DESC);
+CREATE TABLE IF NOT EXISTS holder_successions (
+  id serial PRIMARY KEY,
+  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
+  beneficiary_id int NOT NULL REFERENCES beneficiaries(id) ON DELETE RESTRICT,
+  previous_beneficiary_id int REFERENCES beneficiaries(id) ON DELETE SET NULL,
+  occurred_on date NOT NULL,
+  created_by int REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS renewal_completions (
+  id serial PRIMARY KEY,
+  holder_id int NOT NULL REFERENCES holders(id) ON DELETE CASCADE,
+  reference_date date NOT NULL,
+  completed_by int REFERENCES users(id) ON DELETE SET NULL,
+  note text NOT NULL DEFAULT '',
+  completed_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (holder_id, reference_date)
+);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'holders_current_holder_beneficiary_fk'
+  ) THEN
+    ALTER TABLE holders
+      ADD CONSTRAINT holders_current_holder_beneficiary_fk
+      FOREIGN KEY (current_holder_beneficiary_id) REFERENCES beneficiaries(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+`;
+
+// A versão 3 encerra definitivamente o módulo legado de faturas. A atualização
+// é executada somente com a migração autorizada pelo inicializador local.
+const INVOICE_RETIREMENT_SCHEMA = `DROP TABLE IF EXISTS invoices;`;
+
 async function init(dbClient: pg.Pool) {
   if (process.env["FUNERALCONTROL_ALLOW_SCHEMA_MIGRATION"] !== "true") {
     const { rows } = await dbClient
@@ -111,6 +188,8 @@ async function init(dbClient: pg.Pool) {
     if (!compatibility.ok) throw new Error(compatibility.reason);
   } else {
     await dbClient.query(SCHEMA);
+    await dbClient.query(MANAGEMENT_SCHEMA);
+    await dbClient.query(INVOICE_RETIREMENT_SCHEMA);
     await dbClient.query(
       "ALTER TABLE backup_settings ADD COLUMN IF NOT EXISTS local_backup_dir text",
     );

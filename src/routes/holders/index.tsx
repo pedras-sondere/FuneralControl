@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, Link, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { errorMessage } from "../../lib/error-message";
 import {
@@ -64,6 +64,7 @@ function HoldersListPage() {
   const { user } = Route.useRouteContext();
   const { holders: initialHolders, plans } = Route.useLoaderData();
   const router = useRouter();
+  const [holders, setHolders] = useState(initialHolders);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -78,11 +79,23 @@ function HoldersListPage() {
     phone: "",
     email: "",
     address: "",
-    plan_id: plans.length > 0 ? String(plans[0].id) : "",
+    plan_id: String(plans.find((plan) => plan.active)?.id ?? ""),
     due_day: "10",
     join_date: new Date().toISOString().split("T")[0],
+    monthly_billing_date: new Date().toISOString().split("T")[0],
     status: "ativo" as "ativo" | "cancelado",
   });
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void listHolders({ data: { search: searchTerm, status: statusFilter } }).then(setHolders);
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    setHolders(initialHolders);
+  }, [initialHolders]);
 
   const formatCPF = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 11);
@@ -110,9 +123,10 @@ function HoldersListPage() {
       phone: "",
       email: "",
       address: "",
-      plan_id: plans.length > 0 ? String(plans[0].id) : "",
+      plan_id: String(plans.find((plan) => plan.active)?.id ?? ""),
       due_day: "10",
       join_date: new Date().toISOString().split("T")[0],
+      monthly_billing_date: new Date().toISOString().split("T")[0],
       status: "ativo",
     });
     setIsModalOpen(true);
@@ -147,6 +161,7 @@ function HoldersListPage() {
           plan_id: Number(formData.plan_id),
           due_day: Number(formData.due_day),
           join_date: formData.join_date,
+          monthly_billing_date: formData.monthly_billing_date,
           status: formData.status,
         },
       });
@@ -165,18 +180,7 @@ function HoldersListPage() {
     }
   };
 
-  // Client-side filtering
-  const filteredHolders = initialHolders.filter((h) => {
-    const matchesSearch =
-      searchTerm.trim() === "" ||
-      h.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      h.cpf.includes(searchTerm.replace(/\D/g, ""));
-
-    const matchesStatus =
-      statusFilter === "todos" || h.status.toLowerCase() === statusFilter.toLowerCase();
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredHolders = holders;
 
   return (
     <AppLayout activeTab="holders" user={user}>
@@ -209,7 +213,7 @@ function HoldersListPage() {
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Buscar por nome ou CPF..."
+                  placeholder="Buscar titular ou beneficiário por nome ou CPF..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9 bg-white dark:bg-slate-900"
@@ -222,6 +226,7 @@ function HoldersListPage() {
                   { id: "todos", label: "Todos" },
                   { id: "ativo", label: "Ativos" },
                   { id: "inadimplente", label: "Inadimplentes" },
+                  { id: "falecido", label: "Falecidos" },
                   { id: "cancelado", label: "Cancelados" },
                 ].map((s) => (
                   <Button
@@ -294,6 +299,11 @@ function HoldersListPage() {
                           >
                             {h.name}
                           </Link>
+                          {h.current_holder_name && (
+                            <span className="mt-0.5 block text-xs font-medium text-teal-700 dark:text-teal-400">
+                              Titular atual: {h.current_holder_name}
+                            </span>
+                          )}
                           <span className="text-xs text-slate-400 block font-mono">
                             {formatCPF(h.cpf)}
                           </span>
@@ -326,6 +336,11 @@ function HoldersListPage() {
                           {h.status === "cancelado" && (
                             <Badge variant="outline" className="text-slate-500 border-slate-300">
                               Cancelado
+                            </Badge>
+                          )}
+                          {h.status === "falecido" && (
+                            <Badge className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none">
+                              Falecido
                             </Badge>
                           )}
                         </td>
@@ -448,12 +463,14 @@ function HoldersListPage() {
                     <SelectValue placeholder="Selecione o plano" />
                   </SelectTrigger>
                   <SelectContent>
-                    {plans.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.name} - R$ {Number(p.monthly_price).toFixed(2)}/mês (até{" "}
-                        {p.max_beneficiaries} dep.)
-                      </SelectItem>
-                    ))}
+                    {plans
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name} - R$ {Number(p.monthly_price).toFixed(2)}/mês (até{" "}
+                          {p.max_beneficiaries} dep.)
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -482,6 +499,21 @@ function HoldersListPage() {
                   type="date"
                   value={formData.join_date}
                   onChange={(e) => setFormData({ ...formData, join_date: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="holder-billing-date" className="text-xs font-semibold">
+                  Data-base da mensalidade / renovação *
+                </Label>
+                <Input
+                  id="holder-billing-date"
+                  type="date"
+                  value={formData.monthly_billing_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, monthly_billing_date: e.target.value })
+                  }
                   required
                 />
               </div>
