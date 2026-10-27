@@ -193,7 +193,7 @@ try {
     previousAppVersion = [string]$originalState.appVersion
     updatedAt = (Get-Date).ToUniversalTime().ToString('o')
   }
-  & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -NoBrowser
+  & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot
   if (-not $?) { throw 'A nova versão não passou na verificação de inicialização.' }
   Write-FuneralControlUpdateLog -Stage 'concluida' -Message 'Atualização instalada e validada com sucesso.'
 } catch {
@@ -202,7 +202,7 @@ try {
     Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
   Write-FuneralControlUpdateLog -Stage 'reversao' -Message "Falha; versão anterior restaurada: $($_.Exception.Message)"
-  try { & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot -NoBrowser } catch {}
+  try { & (Join-Path $PSScriptRoot 'Start-FuneralControlV2.ps1') -InstallRoot $InstallRoot -DataRoot $DataRoot } catch {}
   throw
 } finally {
   if (Test-Path -LiteralPath $temporaryRoot) { Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue }

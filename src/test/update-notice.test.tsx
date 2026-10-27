@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { UpdateNotice } from "../components/update-notice";
+import { UpdateNotice, UpdateProgressOverlay } from "../components/update-notice";
 
 describe("aviso de atualização", () => {
   it("apresenta a versão disponível e só inicia a ação após o clique do gestor", () => {
@@ -43,10 +43,17 @@ describe("aviso de atualização", () => {
       />,
     );
 
-    expect(screen.getByText("Atualização em andamento")).toBeInTheDocument();
+    expect(screen.getByText(/Atualização em andamento\./i)).toBeInTheDocument();
     expect(screen.getByText(/não feche o sistema/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Atualização iniciada" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Atualização iniciada" }));
     expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia o uso do sistema enquanto a atualização é instalada", () => {
+    render(<UpdateProgressOverlay version="2.1.0" updateStage="started" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("A atualização está sendo instalada");
+    expect(screen.getByText((_, element) => element?.textContent === "Nova versão: 2.1.0")).toBeInTheDocument();
   });
 });
