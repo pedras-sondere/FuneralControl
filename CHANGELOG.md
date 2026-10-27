@@ -14,4 +14,4 @@
 
 ### Corrigido
 
-- O aviso de atualização informa as etapas de preparação e execução e bloqueia novos cliques enquanto a atualização local é aplicada.
+- O aviso de atualização bloqueia o uso da tela enquanto a atualização local é aplicada e reabre o sistema automaticamente ao concluir ou restaurar a versão anterior.
