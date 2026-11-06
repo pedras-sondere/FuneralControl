@@ -19,4 +19,13 @@ describe("atualizador local", () => {
     expect(source).not.toContain("Expand-Archive");
     expect(source).not.toContain("ProgramData\\FuneralControl\\v2\\uploads");
   });
+
+  it("mantém o servidor ativo até que o atualizador confirme o próprio encerramento", async () => {
+    const source = await readFile(path.join(projectRoot, "src", "lib", "api.functions.ts"), "utf8");
+
+    expect(source).toContain("buildElevatedUpdateCommand");
+    expect(source).toContain('updateProcess.once("spawn"');
+    expect(source).toContain('updateProcess.once("error"');
+    expect(source).not.toContain("setTimeout(() => process.exit");
+  });
 });
