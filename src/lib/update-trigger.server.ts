@@ -62,6 +62,6 @@ export function buildElevatedUpdateCommand(options: Parameters<typeof buildUpdat
   const elevate =
     `Start-Process -FilePath 'powershell.exe' ` +
     `-ArgumentList '-NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}' ` +
-    `-Verb RunAs -WindowStyle Hidden -Wait`;
+    `-Verb RunAs -WindowStyle Hidden`;
   return ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevate];
 }

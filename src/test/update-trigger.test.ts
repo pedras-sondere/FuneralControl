@@ -62,5 +62,6 @@ describe("disparo da atualização local", () => {
     expect(command).toHaveLength(5);
     expect(command[4]).toContain("-Verb RunAs");
     expect(command[4]).toContain("-EncodedCommand");
+    expect(command[4]).not.toContain("-Wait");
   });
 });

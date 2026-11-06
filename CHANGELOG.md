@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 2.1.1 — 06/11/2026
+
+### Corrigido
+
+- A atualização local não encerra mais o sistema por tempo fixo antes de o Windows iniciar o processo elevado. O próprio atualizador passa a encerrar a versão anterior após criar o log e iniciar a execução.
+
 ## 2.1.0 — 26/10/2026
 
 ### Alterado

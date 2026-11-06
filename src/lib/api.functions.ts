@@ -269,10 +269,12 @@ export const startUpdate = createServerFn({ method: "POST" })
       }),
       { detached: true, stdio: "ignore", windowsHide: true },
     );
+    await new Promise<void>((resolve, reject) => {
+      updateProcess.once("spawn", resolve);
+      updateProcess.once("error", reject);
+    });
     updateProcess.unref();
-    // Mantém o servidor vivo tempo suficiente para o navegador receber e exibir o estado
-    // da atualização antes de o atualizador elevado encerrar a versão em uso.
-    setTimeout(() => process.exit(0), 5_000).unref();
+    // O atualizador elevado encerra esta versão somente depois de iniciar e registrar a execução.
     return { ok: true as const };
   });
 
